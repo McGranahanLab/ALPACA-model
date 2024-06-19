@@ -4,17 +4,14 @@ import pandas as pd
 from ALPACA_segment_solution_class import SegmentSolution
 
 # modify this path to run a different cohort, check README for required input files and structure
-example_cohort_input_directory = 'input/example_cohort'
+example_cohort_input_directory = 'data/input/example_cohort'
 
 model_config = {
-    'license': 'remote',
+    'license': 'local',
 }
 config = {'model_config': model_config, 'preprocessing_config': {}}
 
-# if running from bin/MODEL, set wd to ('../../'):
-if os.getcwd().endswith('bin/MODEL'):
-    print('set working directory to project directory')
-    os.chdir('../../')
+
 project_directory = os.getcwd()
 cohort_input = example_cohort_input_directory
 cohort = cohort_input.split('/')[-1]
@@ -37,14 +34,14 @@ for tumour_id in tumour_ids:
         solutions.append(SS.optimal_solution)
         print(f'Segment {input_file_name} done.')
     tumour_output = pd.concat(solutions)
-    tumour_output_directory = f'{project_directory}/output/{cohort}/patient_outputs/'
+    tumour_output_directory = f'{project_directory}/data/output/{cohort}/patient_outputs/'
     os.makedirs(tumour_output_directory, exist_ok=True)
     tumour_output.to_csv(f'{tumour_output_directory}/final_{tumour_id}.csv', index=False)
     tumour_outputs.append(tumour_output)
     os.chdir(project_directory)
 print(f'Creating combined output')
 cohort_output = pd.concat(tumour_outputs)
-cohort_output_directory = f'{project_directory}/output/{cohort}/cohort_outputs'
+cohort_output_directory = f'{project_directory}/data/output/{cohort}/cohort_outputs'
 os.makedirs(cohort_output_directory, exist_ok=True)
 cohort_output.to_csv(f'{cohort_output_directory}/combined.csv', index=False)
 print('Done')
