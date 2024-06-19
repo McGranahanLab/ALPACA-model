@@ -192,6 +192,7 @@ class SegmentSolution:
     def __init__(self, input_file_name, config=None):
         if config is None:
             config = {'preprocessing_config': {}, 'model_config': {}}
+        # Define default values:
         self.ci = 0.5
         self.rsc = False
         self.input_data_directory = None
@@ -209,7 +210,9 @@ class SegmentSolution:
         self.no_improvement_in_D_score = False
         self.diploid_solution_found = False
         self.compare_with_true_solution = False
+        self.ci_table_name = ''
         # load config
+        # default values present in the config object will overwrite the default values defined above
         for key, value in self.config['preprocessing_config'].items():
             setattr(self, key, value)
         self.tumour_id, self.segment = split_input_file_name(input_file_name)
