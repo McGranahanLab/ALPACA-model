@@ -8,6 +8,7 @@ example_cohort_input_directory = 'data/input/example_cohort'
 
 model_config = {
     'license': 'local',
+    'output_all_solutions':True
 }
 config = {'model_config': model_config, 'preprocessing_config': {}}
 
@@ -27,11 +28,17 @@ for tumour_id in tumour_ids:
     input_files = [x for x in os.listdir() if x.endswith('.csv')]
     solutions = []
     for input_file_name in input_files:
+        output_name = 'optimal'+input_file_name.split('ALPACA_input_table_')[1]
         SS = SegmentSolution(input_file_name,config)
         SS.run_iterations()
         SS.find_optimal_solution()
         SS.get_solution()
         solutions.append(SS.optimal_solution)
+        print(SS.output_all_solutions)
+        input('wait')
+        if SS.output_all_solutions:
+            all_solutions = SS.get_all_simplified_solution()
+            all_solutions.to_csv(f'{tumour_output_directory}/all_{tumour_id}.csv', index=False) # TODO change to parquet
         print(f'Segment {input_file_name} done.')
     tumour_output = pd.concat(solutions)
     tumour_output_directory = f'{project_directory}/data/output/{cohort}/patient_outputs/'

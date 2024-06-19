@@ -76,7 +76,7 @@ for input_file_name in input_files:
     SS.find_optimal_solution()
     SS.get_solution()
     optimal_solution = SS.optimal_solution
-    if SS.output_all_solutions: #TODO make False default
+    if SS.output_all_solutions:
         all_solutions = SS.get_all_simplified_solution()
         all_solutions_output_name = output_name.replace('optimal','all')
         all_solutions.to_csv(all_solutions_output_name, index=False) # TODO change to parquet

@@ -211,6 +211,7 @@ class SegmentSolution:
         self.diploid_solution_found = False
         self.compare_with_true_solution = False
         self.ci_table_name = ''
+        self.output_all_solutions = False
         # load config
         # default values present in the config object will overwrite the default values defined above
         for key, value in self.config['preprocessing_config'].items():
