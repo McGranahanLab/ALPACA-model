@@ -27,7 +27,7 @@ parser.add_argument('--ci_table_name', default='', type=str, help='Name of file 
 parser.add_argument('--s_type', default='s_strictly_decreasing', type=str)
 parser.add_argument('--compare_with_true_solution', default=0, type=int)
 parser.add_argument('--run_with_qc', default=0, type=int)
-parser.add_argument('--output_all_solutions', default=0, type=int)
+parser.add_argument('--output_all_solutions', default=0, type=int, help='0 to only save optimal solution, 1 to save all solutiosn in csv format, 2 to use parquet')
 # parse arguments
 args = parser.parse_args()
 input_files = shlex.split(args.input_files)  # each input file is a file name of a table containing single segment
@@ -79,7 +79,7 @@ for input_file_name in input_files:
     if SS.output_all_solutions:
         all_solutions = SS.get_all_simplified_solution()
         all_solutions_output_name = output_name.replace('optimal','all')
-        all_solutions.to_csv(all_solutions_output_name, index=False) # TODO change to parquet
+        all_solutions.to_csv(all_solutions_output_name, index=False)
     end_time = time.time()
     total_run_time = round(end_time - start_time)
     optimal_solution['run_time_seconds'] = total_run_time

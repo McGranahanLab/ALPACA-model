@@ -10,7 +10,7 @@ model_config = {
     'license': 'remote',    
 }
 preprocessing_config = {
-    'output_all_solutions':True,
+    'output_all_solutions':1,
 }
 config = {'model_config': model_config, 'preprocessing_config': preprocessing_config}
 
@@ -43,8 +43,6 @@ for tumour_id in tumour_ids:
     tumour_output_directory = f'{project_directory}/data/output/{cohort}/patient_outputs/'
     os.makedirs(tumour_output_directory, exist_ok=True)
     tumour_output.to_csv(f'{tumour_output_directory}/final_{tumour_id}.csv', index=False)
-    if SS.output_all_solutions:
-        all_solutions.to_csv(f'{tumour_output_directory}/all_{tumour_id}.csv', index=False) # TODO change to parquet
     tumour_outputs.append(tumour_output)
     os.chdir(project_directory)
 print(f'Creating combined output')
