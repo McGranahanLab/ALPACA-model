@@ -1,2 +1,10 @@
 .history/*
 __pycache__/*
+/.idea/.gitignore
+/data/output/example_cohort/cohort_outputs/all_solutions_combined.csv
+/.idea/ALPACA-model.iml
+/.idea/misc.xml
+/.idea/modules.xml
+/.idea/inspectionProfiles/profiles_settings.xml
+/.idea/inspectionProfiles/Project_Default.xml
+/.idea/vcs.xml
