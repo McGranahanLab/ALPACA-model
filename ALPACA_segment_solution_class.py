@@ -188,6 +188,24 @@ def calibrate_clone_proportions(cp: pd.DataFrame):
     return cp
 
 
+def rescale_elbow_points(complexities,elbow):
+    def rescale_below(arr, elbow):
+        min_val = min(arr)
+        max_val = elbow
+        return [round((x - min_val) / (max_val - min_val) - 1,2) for x in arr]
+    def rescale_above(arr, elbow):
+        min_val = elbow
+        max_val = max(arr)
+        return [round((x - min_val) / (max_val - min_val),2) for x in arr]
+    below_elbow = [x for x in complexities if x < elbow]
+    above_elbow = [x for x in complexities if x > elbow]
+    rescaled_below = rescale_below(below_elbow, elbow)
+    rescaled_above = rescale_above(above_elbow, elbow)
+    rescaled = rescaled_below + [0] + rescaled_above
+    rescaled_dict = {k: v for k, v in zip(complexities, rescaled)}
+    return rescaled_dict
+
+    
 class SegmentSolution:
     def __init__(self, input_file_name, config=None):
         if config is None:
@@ -199,6 +217,7 @@ class SegmentSolution:
         self.ccp = True
         self.s_type = 's_strictly_decreasing'
         self.optimal_solution = None
+        self.all_solutions = None
         self.optimal_solution_index = None
         self.elbow = None
         self.maximum_complexity = None
@@ -311,7 +330,11 @@ class SegmentSolution:
         self.optimal_solution.drop(columns=['allowed_complexity'], inplace=True)
     
     def get_all_simplified_solution(self, s=None):
-        all_solutions = self.solutions_combined[['clone','pred_CN_A','pred_CN_B','complexity']]
+        all_solutions = self.solutions_combined[['clone','pred_CN_A','pred_CN_B','complexity']].copy()
         all_solutions['tumour_id'] = self.tumour_id
         all_solutions['segment'] = self.segment
+        elbow = self.optimal_solution.complexity.iloc[0]
+        complexities = all_solutions.complexity.unique()
+        rescaled = rescale_elbow_points(complexities, elbow)
+        all_solutions['elbow_offset'] = all_solutions.complexity.map(rescaled)
         return all_solutions
