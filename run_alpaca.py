@@ -3,7 +3,8 @@ import argparse
 import shlex
 import time
 from ALPACA_segment_solution_class import SegmentSolution
-from run_alpaca import solve
+
+
 def solve(input_file_name, config):
     SS = SegmentSolution(input_file_name, config)
     SS.run_iterations()
