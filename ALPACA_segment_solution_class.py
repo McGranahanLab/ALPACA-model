@@ -199,8 +199,8 @@ def rescale_elbow_points(complexities,elbow):
         return [round((x - min_val) / (max_val - min_val),2) for x in arr]
     below_elbow = [x for x in complexities if x < elbow]
     above_elbow = [x for x in complexities if x > elbow]
-    rescaled_below = rescale_below(below_elbow, elbow)
-    rescaled_above = rescale_above(above_elbow, elbow)
+    rescaled_below = rescale_below(below_elbow, elbow) if len(below_elbow) > 0 else []
+    rescaled_above = rescale_above(above_elbow, elbow) if len(above_elbow) > 0 else []
     rescaled = rescaled_below + [0] + rescaled_above
     rescaled_dict = {k: v for k, v in zip(complexities, rescaled)}
     return rescaled_dict

@@ -2,11 +2,12 @@ import os
 import sys
 sys.path.append('.')
 from ALPACA_segment_solution_class import SegmentSolution
+from run_alpaca import solve
 
-tumour_id = 'CRUK0004'
-segment = '17_36233930_36646386'
+tumour_id = 'CRUK0044'
+segment = '1_144860026_145096660'
 cohort = 'mets'
-input_file_name = f'ALPACA_input_table_{tumour_id}_1_752894_1871979.csv'
+input_file_name = f'ALPACA_input_table_{tumour_id}_{segment}.csv'
 
 
 model_config = {
@@ -34,7 +35,8 @@ preprocessing_config = {
     's_type': 's_strictly_decreasing',
     'chr_table_file': '../_assets/chr_table.csv',
     'input_data_directory': f'../input/{cohort}',
-    'ci_table_name':''
+    'ci_table_name':'',
+    'output_all_solutions':2
 }
 
 config = {'model_config': model_config, 'preprocessing_config': preprocessing_config}
@@ -49,5 +51,6 @@ SS.find_optimal_solution()
 # SS.compare_with_true_solution()
 SS.get_solution()
 optimal_solution = SS.optimal_solution
-all_solutions = SS.get_all_simplified_solution()
+if SS.output_all_solutions:
+    all_solutions = SS.get_all_simplified_solution()
 print('done!')
