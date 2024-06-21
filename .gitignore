@@ -8,3 +8,5 @@ __pycache__/*
 /.idea/inspectionProfiles/profiles_settings.xml
 /.idea/inspectionProfiles/Project_Default.xml
 /.idea/vcs.xml
+__pycache__/ALPACA_model_class.cpython-39.pyc
+__pycache__/ALPACA_segment_solution_class.cpython-39.pyc

@@ -40,6 +40,8 @@ def main():
     parser.add_argument('--compare_with_true_solution', default=0, type=int)
     parser.add_argument('--run_with_qc', default=0, type=int)
     parser.add_argument('--output_all_solutions', default=0, type=int, help='0 to only save optimal solution, 1 to save all solutiosn in csv format, 2 to use parquet')
+    parser.add_argument('--licence', default='local', type=str)
+
     # parse arguments
     args = parser.parse_args()
     input_files = shlex.split(args.input_files)  # each input file is a file name of a table containing single segment
@@ -58,7 +60,8 @@ def main():
         'homozygous_deletion_threshold':args.homozygous_deletion_threshold,
         'homo_del_size_limit': 5 * 10 ** 7,
         'time_limit': args.time_limit,
-        'cpus': args.cpus}
+        'cpus': args.cpus,
+        'licence': args.licence}
     preprocessing_config = {
         'rsc': args.rsc,
         'ccp': args.ccp,
