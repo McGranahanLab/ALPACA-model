@@ -147,10 +147,10 @@ def get_ci_table(input_table, tumour_dir, segment,ci_table_name='', CI=0.5):
             print('No SNP table found, creating artificial CI table')
             ci_table = input_table[['sample', 'segment']].drop_duplicates().copy()
             for x in ['lower_CI_A', 'upper_CI_A', 'lower_CI_B', 'upper_CI_B']:
-                ci_table[x] = 0
+                ci_table[x] = float(0) # to ensure float data type
             for s in ci_table['sample'].unique():
-                A = input_table[input_table['sample'] == s].ph_cpnA_vec.median()
-                B = input_table[input_table['sample'] == s].ph_cpnB_vec.median()
+                A = input_table[input_table['sample'] == s].cpnA.median()
+                B = input_table[input_table['sample'] == s].cpnB.median()
                 ci_table.loc[ci_table['sample'] == s, f'lower_CI_A'] = A - 0.5
                 ci_table.loc[ci_table['sample'] == s, f'lower_CI_B'] = B - 0.5
                 ci_table.loc[ci_table['sample'] == s, f'upper_CI_A'] = A + 0.5
@@ -180,6 +180,10 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     cit_segments = set(cit['segment'].unique())
     if not it_segments.issubset(cit_segments):
         raise ValueError('Segments in input table and ci_table do not match')
+    # check if all columns are present in the input table:
+    expected_columns = ['sample','chr','cpnA','cpnB','segment','tumour_id']
+    if set(it.columns) != set(expected_columns):
+        raise ValueError('Input table does not contain all expected columns')
 
 
 def calibrate_clone_proportions(cp: pd.DataFrame):
