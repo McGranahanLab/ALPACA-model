@@ -184,6 +184,16 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     expected_columns = ['sample','chr','cpnA','cpnB','segment','tumour_id']
     if set(it.columns) != set(expected_columns):
         raise ValueError('Input table does not contain all expected columns')
+    # check if clone proportions sum to 1 for each sample
+    proportions_expressed_as_percents = (cpt.sum()>10).any()
+    if proportions_expressed_as_percents:
+        raise ValueError('Clone proportions are probably expressed as percents, not fractions (e.g. 80 instead of 0.8)')
+    proportions_below_1_in_any_sample = (cpt.sum()<1).any()
+    if proportions_below_1_in_any_sample:
+        raise ValueError('Clone proportions sum to less than 1 in some samples')
+    proportions_above_1_in_any_sample = (cpt.sum()>1).any()
+    if proportions_above_1_in_any_sample:
+        raise ValueError('Clone proportions sum to more than 1 in some samples')
 
 
 def calibrate_clone_proportions(cp: pd.DataFrame):
