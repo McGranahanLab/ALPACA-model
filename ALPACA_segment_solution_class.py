@@ -188,12 +188,17 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     proportions_expressed_as_percents = (cpt.sum()>10).any()
     if proportions_expressed_as_percents:
         raise ValueError('Clone proportions are probably expressed as percents, not fractions (e.g. 80 instead of 0.8)')
-    proportions_below_1_in_any_sample = (cpt.sum()<1).any()
-    if proportions_below_1_in_any_sample:
-        raise ValueError('Clone proportions sum to less than 1 in some samples')
-    proportions_above_1_in_any_sample = (cpt.sum()>1).any()
-    if proportions_above_1_in_any_sample:
-        raise ValueError('Clone proportions sum to more than 1 in some samples')
+    proportions_dont_sum_to_1 = (cpt.sum()!=1).any()
+    # if deviation is small, its probably rounding error, so normalise to one:
+    if (abs(cpt.sum()-1)<0.05).all():
+        cpt = calibrate_clone_proportions(cpt)
+    else:
+        proportions_below_1_in_any_sample = (cpt.sum()<1).any()
+        if proportions_below_1_in_any_sample:
+            raise ValueError('Clone proportions sum to less than 1 in some samples')
+        proportions_above_1_in_any_sample = (cpt.sum()>1).any()
+        if proportions_above_1_in_any_sample:
+            raise ValueError('Clone proportions sum to more than 1 in some samples')
 
 
 def calibrate_clone_proportions(cp: pd.DataFrame):
