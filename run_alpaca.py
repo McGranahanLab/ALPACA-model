@@ -84,6 +84,7 @@ def main():
     
     
     for input_file_name in input_files:
+        print(f'Current file: {input_file_name}')
         start_time = time.time()
         output_name = 'optimal'+input_file_name.split('ALPACA_input_table_')[1]
         all_solutions_output_name = output_name.replace('optimal', 'all')
