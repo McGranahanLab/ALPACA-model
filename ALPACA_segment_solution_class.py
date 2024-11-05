@@ -164,6 +164,10 @@ def get_ci_table(input_table, tumour_dir, segment,ci_table_name='', CI=0.5):
 
 
 def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: typing.List[typing.List]):
+    # check if tree is a list of lists of strings:
+    # e.g. tree=[['cloneA','cloneB'],['cloneA','cloneD','cloneE']]
+    if not all([isinstance(x, list) for x in t]):
+        raise ValueError('Tree is not a list of lists of strings (clone names)')
     # check if all clones are present:
     cpt_clones = set(cpt.index.unique())
     tree_clones = set([c for branch in t for c in branch])
