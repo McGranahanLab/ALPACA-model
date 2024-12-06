@@ -34,7 +34,10 @@ preprocessing_config = {
     's_type': 's_strictly_decreasing',
     'chr_table_file': '../_assets/chr_table.csv',
     'input_data_directory': f'../input/{cohort}',
-    'ci_table_name':'ci_table.csv'
+    'ci_table_name':'ci_table.csv',
+    'run_with_qc':0,
+    'output_all_solutions':0,
+    'output_model_selection_table':1
 }
 
 config = {'model_config': model_config, 'preprocessing_config': preprocessing_config}
