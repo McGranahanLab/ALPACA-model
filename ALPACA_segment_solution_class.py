@@ -68,35 +68,6 @@ def find_s_values(elbow_search_df, max_iterations, x="allowed_complexity", y="D_
     return s, s_code
 
 
-def find_elbow(list_of_solutions, max_iterations):
-    solutions_combined = pd.concat(list_of_solutions)
-    elbow_search_df = (
-        solutions_combined[["complexity", "D_score", "CI_score", "allowed_complexity"]]
-        .drop_duplicates(subset="allowed_complexity", keep="first")
-        .sort_values("allowed_complexity")
-        .reset_index(drop=True)
-    )
-    elbow_search_df_strictly_decreasing = ensure_elbow_strictly_decreasing(
-        elbow_search_df.copy()
-    )
-    s_raw, raw_code = find_s_values(
-        elbow_search_df, max_iterations, "allowed_complexity", "D_score"
-    )
-    s_strictly_decreasing, dec_code = find_s_values(
-        elbow_search_df_strictly_decreasing,
-        max_iterations,
-        "allowed_complexity",
-        "D_score",
-    )
-    s_min = min(s_raw, s_strictly_decreasing)
-    s_values = {
-        "s_min": s_min,
-        "s_raw": s_raw,
-        "s_strictly_decreasing": s_strictly_decreasing,
-        "raw_code": raw_code,
-        "dec_code": dec_code,
-    }
-    return s_values
 
 
 def missing_clones_inherit_from_children(optimal_solution, tree, cp_table):
@@ -277,7 +248,7 @@ class SegmentSolution:
         self.optimal_solution_index = None
         self.elbow = None
         self.maximum_complexity = None
-        self.solutions_combined = None
+        self.solutions_combined = pd.DataFrame()
         self.config = config
         self.metrics = None
         self.no_change_in_complexity = False
@@ -402,16 +373,49 @@ class SegmentSolution:
                         )
                         break
         self.solutions_combined = pd.concat(self.metrics["solutions"])
+        
+    def find_elbow(self):
+        assert self.metrics is not None, "Metrics not found, run iterations first"
+        solutions_combined = pd.concat(self.metrics["solutions"])
+        self.elbow_search_df = (
+            solutions_combined[["complexity", "D_score", "CI_score", "allowed_complexity"]]
+            .drop_duplicates(subset="allowed_complexity", keep="first")
+            .sort_values("allowed_complexity")
+            .reset_index(drop=True)
+        )
+        self.elbow_search_df_strictly_decreasing = ensure_elbow_strictly_decreasing(
+            self.elbow_search_df.copy()
+        )
+        s_raw, raw_code = find_s_values(
+            self.elbow_search_df, self.maximum_complexity, "allowed_complexity", "D_score"
+        )
+        s_strictly_decreasing, dec_code = find_s_values(
+            self.elbow_search_df_strictly_decreasing,
+            self.maximum_complexity,
+            "allowed_complexity",
+            "D_score",
+        )
+        assert s_raw is not None, "S_raw not found"
+        assert s_strictly_decreasing is not None, "S_strictly_decreasing not found"
+        s_min = min(s_raw, s_strictly_decreasing)
+        s_values = {
+            "s_min": s_min,
+            "s_raw": s_raw,
+            "s_strictly_decreasing": s_strictly_decreasing,
+            "raw_code": raw_code,
+            "dec_code": dec_code,
+        }
+        self.elbow = s_values
+        self.optimal_solution_index = self.elbow[self.s_type]
 
     def find_optimal_solution(self):
         # check if diploid solution was found:
+        assert self.metrics is not None, "Metrics not found, run iterations first"
         diploid_solution_found = len(set(self.metrics["D_scores"])) == 1
         if diploid_solution_found:
             self.optimal_solution_index = 0
         else:
-            # find elbow:
-            self.elbow = find_elbow(self.metrics["solutions"], self.maximum_complexity)
-            self.optimal_solution_index = self.elbow[self.s_type]
+            self.find_elbow()
 
     def get_solution(self, s=None):
         if s is None:
