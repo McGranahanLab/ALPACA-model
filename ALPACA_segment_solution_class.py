@@ -259,6 +259,8 @@ class SegmentSolution:
         self.diploid_solution_found: bool = False
         self.compare_with_true_solution: bool = False
         self.ci_table_name: str = ""
+        self.output_all_solutions: bool = False
+        self.output_model_selection_table: bool = False
         # load config
         # default values present in the config object will overwrite the default values defined above
         for key, value in self.config["preprocessing_config"].items():
@@ -415,6 +417,12 @@ class SegmentSolution:
             self.optimal_solution_index = 0
         else:
             self.find_elbow()
+            # add metadata to the elbow search dataframe:
+            self.elbow_search_df_strictly_decreasing['segment'] = self.segment
+            self.elbow_search_df_strictly_decreasing['tumour_id'] = self.tumour_id
+            self.elbow_search_df_strictly_decreasing['opt_sol_indx'] = self.optimal_solution_index
+            
+            
 
     def get_solution(self, s=None):
         if s is None:

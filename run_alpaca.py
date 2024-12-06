@@ -28,6 +28,7 @@ parser.add_argument('--s_type', default='s_strictly_decreasing', type=str)
 parser.add_argument('--compare_with_true_solution', default=0, type=int)
 parser.add_argument('--run_with_qc', default=0, type=int)
 parser.add_argument('--output_all_solutions', default=0, type=int)
+parser.add_argument('--output_model_selection_table', default=0, type=int)
 # parse arguments
 args = parser.parse_args()
 input_files = shlex.split(args.input_files)  # each input file is a file name of a table containing single segment
@@ -57,7 +58,9 @@ preprocessing_config = {
     'input_data_directory': args.input_data_directory,
     'run_with_qc': args.run_with_qc,
     'output_all_solutions': args.output_all_solutions,
+    'output_model_selection_table' : args.output_model_selection_table
 }
+
 config = {'model_config': model_config, 'preprocessing_config': preprocessing_config}
 
 
@@ -76,10 +79,14 @@ for input_file_name in input_files:
     SS.find_optimal_solution()
     SS.get_solution()
     optimal_solution = SS.optimal_solution
-    if SS.output_all_solutions: #TODO make False default
+    assert optimal_solution is not None
+    if SS.output_all_solutions:
         all_solutions = SS.get_all_simplified_solution()
         all_solutions_output_name = output_name.replace('optimal','all')
         all_solutions.to_csv(all_solutions_output_name, index=False) # TODO change to parquet
+    if SS.output_model_selection_table:
+        output_model_selection_table = SS.elbow_search_df_strictly_decreasing
+        output_model_selection_table.to_csv(f'{SS.tumour_id}_{SS.segment}_model_selection_table.csv', index=False)
     end_time = time.time()
     total_run_time = round(end_time - start_time)
     optimal_solution['run_time_seconds'] = total_run_time
