@@ -8,6 +8,7 @@ import kneed
 from scipy.stats import norm
 import typing
 from ALPACA_model_class import Model
+from typing import Optional, Dict, Any
 
 
 def ensure_elbow_strictly_decreasing(df):
@@ -66,8 +67,6 @@ def find_s_values(elbow_search_df, max_iterations, x="allowed_complexity", y="D_
             s = s_candidates[0]
             s_code = "high_sensitivity"
     return s, s_code
-
-
 
 
 def missing_clones_inherit_from_children(optimal_solution, tree, cp_table):
@@ -235,28 +234,31 @@ def calibrate_clone_proportions(cp: pd.DataFrame):
 
 
 class SegmentSolution:
-    def __init__(self, input_file_name, config=None):
+    def __init__(self, input_file_name: str, config: Optional[Dict[str, Any]] = None):
         if config is None:
             config = {"preprocessing_config": {}, "model_config": {}}
         # Define default values:
-        self.ci = 0.5
-        self.rsc = False
-        self.input_data_directory = None
-        self.ccp = True
-        self.s_type = "s_strictly_decreasing"
-        self.optimal_solution = None
-        self.optimal_solution_index = None
-        self.elbow = None
-        self.maximum_complexity = None
-        self.solutions_combined = pd.DataFrame()
-        self.config = config
-        self.metrics = None
-        self.no_change_in_complexity = False
-        self.no_change_in_D_score = False
-        self.no_improvement_in_D_score = False
-        self.diploid_solution_found = False
-        self.compare_with_true_solution = False
-        self.ci_table_name = ""
+        self.ci: float = 0.5
+        self.rsc: bool = False
+        self.input_data_directory: Optional[str] = None
+        self.ccp: bool = True
+        self.s_type: str = "s_strictly_decreasing"
+        self.optimal_solution: Optional[Any] = None
+        self.optimal_solution_index: Optional[int] = None
+        self.elbow: Dict[str, Any] = {}
+        self.maximum_complexity: Optional[int] = None
+        self.solutions_combined: pd.DataFrame = pd.DataFrame()
+        self.config: Dict[str, Any] = config
+        self.metrics: Dict[str, list] = {
+            name: []
+            for name in ["D_scores", "solutions", "run_time", "models", "complexity"]
+        }
+        self.no_change_in_complexity: bool = False
+        self.no_change_in_D_score: bool = False
+        self.no_improvement_in_D_score: bool = False
+        self.diploid_solution_found: bool = False
+        self.compare_with_true_solution: bool = False
+        self.ci_table_name: str = ""
         # load config
         # default values present in the config object will overwrite the default values defined above
         for key, value in self.config["preprocessing_config"].items():
@@ -344,10 +346,6 @@ class SegmentSolution:
             * math.ceil(self.input_table[["cpnA", "cpnB"]].max().max()),
         )
         objective_function_threshold = 0.1  # iterations will stop if D score does not improve by more than this value in 3 consecutive iterations
-        self.metrics = {
-            name: []
-            for name in ["D_scores", "solutions", "run_time", "models", "complexity"]
-        }
         # run diploid model:
         self.run_model(allowed_complexity=0)
         # don't iterate if solution is likely to be diploid:
@@ -361,24 +359,22 @@ class SegmentSolution:
                 )
                 if stop_conditions:
                     # check if elbow can be found
-                    elbow_findable = (
-                        find_elbow(self.metrics["solutions"], self.maximum_complexity)[
-                            "s_min"
-                        ]
-                        < 1000
-                    )  # TODO convert to method
+                    self.find_elbow()
+                    elbow_findable = self.elbow["s_min"] < 1000
                     if elbow_findable:
                         print(
                             f"** Stopping iterations at complexity {c} due to lack of improvement in D score"
                         )
                         break
         self.solutions_combined = pd.concat(self.metrics["solutions"])
-        
+
     def find_elbow(self):
         assert self.metrics is not None, "Metrics not found, run iterations first"
         solutions_combined = pd.concat(self.metrics["solutions"])
         self.elbow_search_df = (
-            solutions_combined[["complexity", "D_score", "CI_score", "allowed_complexity"]]
+            solutions_combined[
+                ["complexity", "D_score", "CI_score", "allowed_complexity"]
+            ]
             .drop_duplicates(subset="allowed_complexity", keep="first")
             .sort_values("allowed_complexity")
             .reset_index(drop=True)
@@ -387,7 +383,10 @@ class SegmentSolution:
             self.elbow_search_df.copy()
         )
         s_raw, raw_code = find_s_values(
-            self.elbow_search_df, self.maximum_complexity, "allowed_complexity", "D_score"
+            self.elbow_search_df,
+            self.maximum_complexity,
+            "allowed_complexity",
+            "D_score",
         )
         s_strictly_decreasing, dec_code = find_s_values(
             self.elbow_search_df_strictly_decreasing,
