@@ -4,6 +4,7 @@ import shlex
 import time
 from ALPACA_segment_solution_class import SegmentSolution
 
+
 parser = argparse.ArgumentParser(description="Run ALPACA with specified parameters.")
 parser.add_argument('--input_data_directory',type=str,required=True,help="Directory where input data is stored. Should contain subdirectories for each tumour")
 parser.add_argument('--use_binary_search',type=int,default=False,help="Whether to use binary search or not. Binary search is faster but may not find optimal solution.")
