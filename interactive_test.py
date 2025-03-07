@@ -2,6 +2,7 @@ import os
 import sys
 sys.path.append('.')
 from ALPACA_segment_solution_class import SegmentSolution
+
 from run_alpaca import solve
 tumour_id = 'LTXSIM127'
 segment = '10_1018473_1437135'
@@ -34,8 +35,10 @@ preprocessing_config = {
     's_type': 's_strictly_decreasing',
     'chr_table_file': '../_assets/chr_table.csv',
     'input_data_directory': f'../input/{cohort}',
-    'ci_table_name':'',
-    'output_all_solutions':0
+    'ci_table_name':'ci_table.csv',
+    'run_with_qc':0,
+    'output_all_solutions':0,
+    'output_model_selection_table':1
 }
 
 config = {'model_config': model_config, 'preprocessing_config': preprocessing_config}
@@ -52,4 +55,6 @@ SS.get_solution()
 optimal_solution = SS.optimal_solution
 if SS.output_all_solutions:
     all_solutions = SS.get_all_simplified_solution()
+all_solutions = SS.get_all_simplified_solution()
+elbow_table = SS.elbow_search_df_strictly_decreasing
 print('done!')
