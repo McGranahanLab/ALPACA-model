@@ -71,6 +71,9 @@ print('Running ALPACA with the following parameters:')
 for arg in vars(args):
     print(arg, getattr(args, arg))
 
+# exit if input_files is empty:
+if len(input_files) == 0:
+    raise ValueError("No input files provided. Please specify at least one input file.")
 
 for input_file_name in input_files:
     output_name = 'optimal'+input_file_name.split('ALPACA_input_table_')[1]
