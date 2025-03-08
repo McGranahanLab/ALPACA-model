@@ -207,27 +207,6 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     # e.g. tree=[['cloneA','cloneB'],['cloneA','cloneD','cloneE']]
     if not all([isinstance(x, list) for x in t]):
         raise ValueError('Tree is not a list of lists of strings (clone names)')
-            print("No SNP table found, creating artificial CI table")
-            ci_table = input_table[["sample", "segment"]].drop_duplicates().copy()
-            for x in ["lower_CI_A", "upper_CI_A", "lower_CI_B", "upper_CI_B"]:
-                ci_table[x] = 0
-            for s in ci_table["sample"].unique():
-                A = input_table[input_table["sample"] == s].ph_cpnA_vec.median()
-                B = input_table[input_table["sample"] == s].ph_cpnB_vec.median()
-                ci_table.loc[ci_table["sample"] == s, f"lower_CI_A"] = A - 0.5
-                ci_table.loc[ci_table["sample"] == s, f"lower_CI_B"] = B - 0.5
-                ci_table.loc[ci_table["sample"] == s, f"upper_CI_A"] = A + 0.5
-                ci_table.loc[ci_table["sample"] == s, f"upper_CI_B"] = B + 0.5
-        for allele in ["A", "B"]:
-            ci_table[f"lower_CI_{allele}"] = ci_table[f"lower_CI_{allele}"].apply(
-                lambda x: max(x, 0)
-            )
-            ci_table[f"upper_CI_{allele}"] = ci_table[f"upper_CI_{allele}"].apply(
-                lambda x: max(x, 0.01)
-            )
-        ci_table["ci_value"] = CI
-        ci_table = ci_table.reset_index(drop=True).sort_values("sample")
-    return ci_table
     # check if all clones are present:
     cpt_clones = set(cpt.index.unique())
     tree_clones = set([c for branch in t for c in branch])
@@ -237,8 +216,14 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     it_samples = set(it["sample"].unique())
     cpt_samples = set(cpt.columns)
     cit_samples = set(cit["sample"].unique())
-    if it_samples != cpt_samples != cit_samples:
-        raise ValueError("Samples in input table, cp_table and ci_table do not match")
+    if it_samples != cpt_samples or cpt_samples != cit_samples or it_samples != cit_samples:
+        it_cpt_diff = it_samples.symmetric_difference(cpt_samples)
+        it_cit_diff = it_samples.symmetric_difference(cit_samples)
+        cpt_cit_diff = cpt_samples.symmetric_difference(cit_samples)
+        print("Mismatch between it_samples and cpt_samples:", it_cpt_diff)
+        print("Mismatch between it_samples and cit_samples:", it_cit_diff)
+        print("Mismatch between cpt_samples and cit_samples:", cpt_cit_diff)
+        raise ValueError("Sample names in input table, cp_table and ci_table do not match")
     # check if segment is present in the ci_table:
     it_segments = set(it["segment"].unique())
     cit_segments = set(cit["segment"].unique())
@@ -253,16 +238,17 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     if proportions_expressed_as_percents:
         raise ValueError('Clone proportions are probably expressed as percents, not fractions (e.g. 80 instead of 0.8)')
     proportions_dont_sum_to_1 = (cpt.sum()!=1).any()
-    # if deviation is small, its probably rounding error, so normalise to one:
-    if (abs(cpt.sum()-1)<0.05).all():
-        cpt = calibrate_clone_proportions(cpt)
-    else:
-        proportions_below_1_in_any_sample = (cpt.sum()<1).any()
-        if proportions_below_1_in_any_sample:
-            raise ValueError('Clone proportions sum to less than 1 in some samples')
-        proportions_above_1_in_any_sample = (cpt.sum()>1).any()
-        if proportions_above_1_in_any_sample:
-            raise ValueError('Clone proportions sum to more than 1 in some samples')
+    if proportions_dont_sum_to_1:
+        # if deviation is small, its probably rounding error, so normalise to one:
+        if (abs(cpt.sum()-1)<0.05).all():
+            cpt = calibrate_clone_proportions(cpt)
+        else:
+            proportions_below_1_in_any_sample = (cpt.sum()<1).any()
+            if proportions_below_1_in_any_sample:
+                raise ValueError('Clone proportions sum to less than 1 in some samples')
+            proportions_above_1_in_any_sample = (cpt.sum()>1).any()
+            if proportions_above_1_in_any_sample:
+                raise ValueError('Clone proportions sum to more than 1 in some samples')
 
 
 def calibrate_clone_proportions(cp: pd.DataFrame):
