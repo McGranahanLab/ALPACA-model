@@ -217,12 +217,10 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     cpt_samples = set(cpt.columns)
     cit_samples = set(cit["sample"].unique())
     if it_samples != cpt_samples or cpt_samples != cit_samples or it_samples != cit_samples:
-        it_cpt_diff = it_samples.symmetric_difference(cpt_samples)
-        it_cit_diff = it_samples.symmetric_difference(cit_samples)
-        cpt_cit_diff = cpt_samples.symmetric_difference(cit_samples)
-        print("Mismatch between it_samples and cpt_samples:", it_cpt_diff)
-        print("Mismatch between it_samples and cit_samples:", it_cit_diff)
-        print("Mismatch between cpt_samples and cit_samples:", cpt_cit_diff)
+        print("------ERROR------")
+        print("Sample names in input table:", sorted(list(it_samples)))
+        print("Sample names in clone proportions table:", sorted(list(cpt_samples)))
+        print("Sample names in confidence intervals table:", sorted(list(cit_samples)))
         raise ValueError("Sample names in input table, cp_table and ci_table do not match")
     # check if segment is present in the ci_table:
     it_segments = set(it["segment"].unique())
@@ -239,10 +237,15 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
         raise ValueError('Clone proportions are probably expressed as percents, not fractions (e.g. 80 instead of 0.8)')
     proportions_dont_sum_to_1 = (cpt.sum()!=1).any()
     if proportions_dont_sum_to_1:
-        # if deviation is small, its probably rounding error, so normalise to one:
+        print("------WARNING------")
+        print("Clone proportions do not sum to 1 in some samples")
+        sum_df = cpt.sum().reset_index().rename(columns={'index':'sample',0:'proportions'})
+        print(sum_df)
         if (abs(cpt.sum()-1)<0.05).all():
+            print("Clones proportions are close to 1, calibrating them to sum to 1 (likely rounding errors)")
             cpt = calibrate_clone_proportions(cpt)
         else:
+            print("Clones proportions are not close to 1, exiting")
             proportions_below_1_in_any_sample = (cpt.sum()<1).any()
             if proportions_below_1_in_any_sample:
                 raise ValueError('Clone proportions sum to less than 1 in some samples')
