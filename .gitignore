@@ -2,3 +2,4 @@
 __pycache__/*
 /data/output/example_cohort/cohort_outputs/all_solutions_combined.csv
 /.idea/*
+alpaca/__pycache__/*
