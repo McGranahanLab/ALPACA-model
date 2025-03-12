@@ -11,7 +11,7 @@ model_config = {
     'license': 'remote',    
 }
 preprocessing_config = {
-    'output_all_solutions':1,
+    'output_all_solutions':0,
 }
 config = {'model_config': model_config, 'preprocessing_config': preprocessing_config}
 
