@@ -30,6 +30,7 @@ parser.add_argument('--compare_with_true_solution', default=0, type=int)
 parser.add_argument('--run_with_qc', default=0, type=int)
 parser.add_argument('--output_all_solutions', default=0, type=int)
 parser.add_argument('--output_model_selection_table', default=0, type=int)
+parser.add_argument('--debug', default=0, type=int)
 # parse arguments
 args = parser.parse_args()
 input_files = shlex.split(args.input_files)  # each input file is a file name of a table containing single segment
@@ -59,7 +60,8 @@ preprocessing_config = {
     'input_data_directory': args.input_data_directory,
     'run_with_qc': args.run_with_qc,
     'output_all_solutions': args.output_all_solutions,
-    'output_model_selection_table' : args.output_model_selection_table
+    'output_model_selection_table' : args.output_model_selection_table,
+    'debug': args.debug
 }
 
 config = {'model_config': model_config, 'preprocessing_config': preprocessing_config}
@@ -92,7 +94,8 @@ for input_file_name in input_files:
         output_model_selection_table = SS.elbow_search_df_strictly_decreasing
         output_model_selection_table.to_csv(f'{SS.tumour_id}_{SS.segment}_model_selection_table.csv', index=False)
     end_time = time.time()
-    total_run_time = round(end_time - start_time)
-    optimal_solution['run_time_seconds'] = total_run_time
+    if SS.debug:
+        total_run_time = round(end_time - start_time)
+        optimal_solution['run_time_seconds'] = total_run_time
     optimal_solution.to_csv(output_name, index=False)
     print(f'Segment {input_file_name} solved.')

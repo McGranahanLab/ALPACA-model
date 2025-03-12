@@ -228,7 +228,7 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     if not it_segments.issubset(cit_segments):
         raise ValueError('Segments in input table and ci_table do not match')
     # check if all columns are present in the input table:
-    expected_columns = ['sample','chr','cpnA','cpnB','segment','tumour_id']
+    expected_columns = ['sample','cpnA','cpnB','segment','tumour_id']
     if set(it.columns) != set(expected_columns):
         raise ValueError('Input table does not contain all expected columns')
     # check if clone proportions sum to 1 for each sample
@@ -306,6 +306,7 @@ class SegmentSolution:
         self.ci_table_name: str = ""
         self.output_all_solutions: bool = False
         self.output_model_selection_table: bool = False
+        self.debug: bool = False
         # load config
         # default values present in the config object will overwrite the default values defined above
         for key, value in self.config["preprocessing_config"].items():
@@ -467,8 +468,6 @@ class SegmentSolution:
             self.elbow_search_df_strictly_decreasing['tumour_id'] = self.tumour_id
             self.elbow_search_df_strictly_decreasing['opt_sol_indx'] = self.optimal_solution_index
             
-            
-
     def get_solution(self, s=None):
         if s is None:
             s = self.optimal_solution_index
@@ -477,7 +476,9 @@ class SegmentSolution:
         ).copy()
         self.optimal_solution["tumour_id"] = self.tumour_id
         self.optimal_solution["segment"] = self.segment
-        self.optimal_solution.drop(columns=["allowed_complexity"], inplace=True)
+        if not self.debug:
+            self.optimal_solution.drop(columns=['allowed_complexity','complexity','variability_penalty_count','state_change_count','event_count'], inplace=True)
+            self.optimal_solution = self.optimal_solution[['tumour_id','segment','clone','pred_CN_A','pred_CN_B']]
 
     def get_all_simplified_solution(self, s=None):
         all_solutions = self.solutions_combined[['clone','pred_CN_A','pred_CN_B','complexity']].copy()
