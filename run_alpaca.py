@@ -149,3 +149,24 @@ for input_file_name in input_files:
         optimal_solution["run_time_seconds"] = total_run_time
     optimal_solution.to_csv(output_name, index=False)
     print(f"Segment {input_file_name} solved.")
+print("Done")
+print(
+    """
+ _____ __    _____ _____ _____ _____
+|  _  |  |  |  _  |  _  |     |  _  |
+|     |  |__|   __|     |   --|     |
+|__|__|_____|__|  |__|__|_____|__|__|
+  /\\⌒⌒⌒/\\
+  (⦿   ⦿)
+  ( 'Y' )
+   (   )
+   (   )
+   (   )
+   (~ ~~~~~~~~~~)
+   ( ~ ~~   ~~  )
+   ( ~  ~ ~  ~  )
+   (~  ~~~~~   ~)
+    │ │     │ │
+    │ │     │ │
+"""
+)
