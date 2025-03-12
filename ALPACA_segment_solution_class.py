@@ -183,30 +183,36 @@ def get_ci_table(input_table, tumour_dir, segment, ci_table_name="", CI=0.5):
             ].drop_duplicates()
         except FileNotFoundError:
             # TODO devise more sophisticated way to calculate CI
-            print('No SNP table found, creating artificial CI table')
-            ci_table = input_table[['sample', 'segment']].drop_duplicates().copy()
-            for x in ['lower_CI_A', 'upper_CI_A', 'lower_CI_B', 'upper_CI_B']:
-                ci_table[x] = float(0) # to ensure float data type
-            for s in ci_table['sample'].unique():
-                A = input_table[input_table['sample'] == s].cpnA.median()
-                B = input_table[input_table['sample'] == s].cpnB.median()
-                ci_table.loc[ci_table['sample'] == s, f'lower_CI_A'] = A - 0.5
-                ci_table.loc[ci_table['sample'] == s, f'lower_CI_B'] = B - 0.5
-                ci_table.loc[ci_table['sample'] == s, f'upper_CI_A'] = A + 0.5
-                ci_table.loc[ci_table['sample'] == s, f'upper_CI_B'] = B + 0.5
-        for allele in ['A', 'B']:
-            ci_table[f'lower_CI_{allele}'] = ci_table[f'lower_CI_{allele}'].apply(lambda x: max(x, 0))
-            ci_table[f'upper_CI_{allele}'] = ci_table[f'upper_CI_{allele}'].apply(lambda x: max(x, 0.01))
-        ci_table['ci_value'] = CI
-        ci_table = ci_table.reset_index(drop=True).sort_values('sample')
+            print("No SNP table found, creating artificial CI table")
+            ci_table = input_table[["sample", "segment"]].drop_duplicates().copy()
+            for x in ["lower_CI_A", "upper_CI_A", "lower_CI_B", "upper_CI_B"]:
+                ci_table[x] = float(0)  # to ensure float data type
+            for s in ci_table["sample"].unique():
+                A = input_table[input_table["sample"] == s].cpnA.median()
+                B = input_table[input_table["sample"] == s].cpnB.median()
+                ci_table.loc[ci_table["sample"] == s, f"lower_CI_A"] = A - 0.5
+                ci_table.loc[ci_table["sample"] == s, f"lower_CI_B"] = B - 0.5
+                ci_table.loc[ci_table["sample"] == s, f"upper_CI_A"] = A + 0.5
+                ci_table.loc[ci_table["sample"] == s, f"upper_CI_B"] = B + 0.5
+        for allele in ["A", "B"]:
+            ci_table[f"lower_CI_{allele}"] = ci_table[f"lower_CI_{allele}"].apply(
+                lambda x: max(x, 0)
+            )
+            ci_table[f"upper_CI_{allele}"] = ci_table[f"upper_CI_{allele}"].apply(
+                lambda x: max(x, 0.01)
+            )
+        ci_table["ci_value"] = CI
+        ci_table = ci_table.reset_index(drop=True).sort_values("sample")
     return ci_table
 
 
-def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: typing.List[typing.List]):
+def validate_inputs(
+    it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: typing.List[typing.List]
+):
     # check if tree is a list of lists of strings:
     # e.g. tree=[['cloneA','cloneB'],['cloneA','cloneD','cloneE']]
     if not all([isinstance(x, list) for x in t]):
-        raise ValueError('Tree is not a list of lists of strings (clone names)')
+        raise ValueError("Tree is not a list of lists of strings (clone names)")
     # check if all clones are present:
     cpt_clones = set(cpt.index.unique())
     tree_clones = set([c for branch in t for c in branch])
@@ -216,42 +222,56 @@ def validate_inputs(it: pd.DataFrame, cpt: pd.DataFrame, cit: pd.DataFrame, t: t
     it_samples = set(it["sample"].unique())
     cpt_samples = set(cpt.columns)
     cit_samples = set(cit["sample"].unique())
-    if it_samples != cpt_samples or cpt_samples != cit_samples or it_samples != cit_samples:
+    if (
+        it_samples != cpt_samples
+        or cpt_samples != cit_samples
+        or it_samples != cit_samples
+    ):
         print("------ERROR------")
         print("Sample names in input table:", sorted(list(it_samples)))
         print("Sample names in clone proportions table:", sorted(list(cpt_samples)))
         print("Sample names in confidence intervals table:", sorted(list(cit_samples)))
-        raise ValueError("Sample names in input table, cp_table and ci_table do not match")
+        raise ValueError(
+            "Sample names in input table, cp_table and ci_table do not match"
+        )
     # check if segment is present in the ci_table:
     it_segments = set(it["segment"].unique())
     cit_segments = set(cit["segment"].unique())
     if not it_segments.issubset(cit_segments):
-        raise ValueError('Segments in input table and ci_table do not match')
+        raise ValueError("Segments in input table and ci_table do not match")
     # check if all columns are present in the input table:
-    expected_columns = ['sample','cpnA','cpnB','segment','tumour_id']
+    expected_columns = ["sample", "cpnA", "cpnB", "segment", "tumour_id"]
     if set(it.columns) != set(expected_columns):
-        raise ValueError('Input table does not contain all expected columns')
+        raise ValueError("Input table does not contain all expected columns")
     # check if clone proportions sum to 1 for each sample
-    proportions_expressed_as_percents = (cpt.sum()>10).any()
+    proportions_expressed_as_percents = (cpt.sum() > 10).any()
     if proportions_expressed_as_percents:
-        raise ValueError('Clone proportions are probably expressed as percents, not fractions (e.g. 80 instead of 0.8)')
-    proportions_dont_sum_to_1 = (cpt.sum()!=1).any()
+        raise ValueError(
+            "Clone proportions are probably expressed as percents, not fractions (e.g. 80 instead of 0.8)"
+        )
+    proportions_dont_sum_to_1 = (cpt.sum() != 1).any()
     if proportions_dont_sum_to_1:
         print("------WARNING------")
         print("Clone proportions do not sum to 1 in some samples")
-        sum_df = cpt.sum().reset_index().rename(columns={'index':'sample',0:'proportions'})
+        sum_df = (
+            cpt.sum()
+            .reset_index()
+            .rename(columns={"index": "sample", 0: "proportions"})
+        )
         print(sum_df)
-        if (abs(cpt.sum()-1)<0.05).all():
-            print("Clones proportions are close to 1, calibrating them to sum to 1 (likely rounding errors)")
+        if (abs(cpt.sum() - 1) < 0.05).all():
+            print(
+                "Clones proportions are close to 1, calibrating them to sum to 1 (likely rounding errors)"
+            )
             cpt = calibrate_clone_proportions(cpt)
         else:
             print("Clones proportions are not close to 1, exiting")
-            proportions_below_1_in_any_sample = (cpt.sum()<1).any()
+            proportions_below_1_in_any_sample = (cpt.sum() < 1).any()
             if proportions_below_1_in_any_sample:
-                raise ValueError('Clone proportions sum to less than 1 in some samples')
-            proportions_above_1_in_any_sample = (cpt.sum()>1).any()
+                raise ValueError("Clone proportions sum to less than 1 in some samples")
+            proportions_above_1_in_any_sample = (cpt.sum() > 1).any()
             if proportions_above_1_in_any_sample:
-                raise ValueError('Clone proportions sum to more than 1 in some samples')
+                raise ValueError("Clone proportions sum to more than 1 in some samples")
 
 
 def calibrate_clone_proportions(cp: pd.DataFrame):
@@ -260,15 +280,17 @@ def calibrate_clone_proportions(cp: pd.DataFrame):
     return cp
 
 
-def rescale_elbow_points(complexities,elbow):
+def rescale_elbow_points(complexities, elbow):
     def rescale_below(arr, elbow):
         min_val = min(arr)
         max_val = elbow
-        return [round((x - min_val) / (max_val - min_val) - 1,2) for x in arr]
+        return [round((x - min_val) / (max_val - min_val) - 1, 2) for x in arr]
+
     def rescale_above(arr, elbow):
         min_val = elbow
         max_val = max(arr)
-        return [round((x - min_val) / (max_val - min_val),2) for x in arr]
+        return [round((x - min_val) / (max_val - min_val), 2) for x in arr]
+
     below_elbow = [x for x in complexities if x < elbow]
     above_elbow = [x for x in complexities if x > elbow]
     rescaled_below = rescale_below(below_elbow, elbow) if len(below_elbow) > 0 else []
@@ -277,7 +299,7 @@ def rescale_elbow_points(complexities,elbow):
     rescaled_dict = {k: v for k, v in zip(complexities, rescaled)}
     return rescaled_dict
 
-    
+
 class SegmentSolution:
     def __init__(self, input_file_name: str, config: Optional[Dict[str, Any]] = None):
         if config is None:
@@ -464,10 +486,12 @@ class SegmentSolution:
         else:
             self.find_elbow()
             # add metadata to the elbow search dataframe:
-            self.elbow_search_df_strictly_decreasing['segment'] = self.segment
-            self.elbow_search_df_strictly_decreasing['tumour_id'] = self.tumour_id
-            self.elbow_search_df_strictly_decreasing['opt_sol_indx'] = self.optimal_solution_index
-            
+            self.elbow_search_df_strictly_decreasing["segment"] = self.segment
+            self.elbow_search_df_strictly_decreasing["tumour_id"] = self.tumour_id
+            self.elbow_search_df_strictly_decreasing["opt_sol_indx"] = (
+                self.optimal_solution_index
+            )
+
     def get_solution(self, s=None):
         if s is None:
             s = self.optimal_solution_index
@@ -477,15 +501,28 @@ class SegmentSolution:
         self.optimal_solution["tumour_id"] = self.tumour_id
         self.optimal_solution["segment"] = self.segment
         if not self.debug:
-            self.optimal_solution.drop(columns=['allowed_complexity','complexity','variability_penalty_count','state_change_count','event_count'], inplace=True)
-            self.optimal_solution = self.optimal_solution[['tumour_id','segment','clone','pred_CN_A','pred_CN_B']]
+            self.optimal_solution.drop(
+                columns=[
+                    "allowed_complexity",
+                    "complexity",
+                    "variability_penalty_count",
+                    "state_change_count",
+                    "event_count",
+                ],
+                inplace=True,
+            )
+            self.optimal_solution = self.optimal_solution[
+                ["tumour_id", "segment", "clone", "pred_CN_A", "pred_CN_B"]
+            ]
 
     def get_all_simplified_solution(self, s=None):
-        all_solutions = self.solutions_combined[['clone','pred_CN_A','pred_CN_B','complexity']].copy()
-        all_solutions['tumour_id'] = self.tumour_id
-        all_solutions['segment'] = self.segment
+        all_solutions = self.solutions_combined[
+            ["clone", "pred_CN_A", "pred_CN_B", "complexity"]
+        ].copy()
+        all_solutions["tumour_id"] = self.tumour_id
+        all_solutions["segment"] = self.segment
         elbow = self.optimal_solution.complexity.iloc[0]
         complexities = all_solutions.complexity.unique()
         rescaled = rescale_elbow_points(complexities, elbow)
-        all_solutions['elbow_offset'] = all_solutions.complexity.map(rescaled)
+        all_solutions["elbow_offset"] = all_solutions.complexity.map(rescaled)
         return all_solutions
