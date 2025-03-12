@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
+print('Starting ALPACA')
 import argparse
+import os
 import shlex
+import sys
 import time
+from tqdm import tqdm
+from io import StringIO
 from ALPACA_segment_solution_class import SegmentSolution
-
+from alpaca.utils import print_logo
 
 parser = argparse.ArgumentParser(description="Run ALPACA with specified parameters.")
 parser.add_argument(
@@ -125,48 +130,47 @@ for arg in vars(args):
 if len(input_files) == 0:
     raise ValueError("No input files provided. Please specify at least one input file.")
 
-for input_file_name in input_files:
-    output_name = "optimal" + input_file_name.split("ALPACA_input_table_")[1]
-    start_time = time.time()
-    SS = SegmentSolution(input_file_name, config)
-    SS.run_iterations()
-    SS.find_optimal_solution()
-    SS.get_solution()
-    optimal_solution = SS.optimal_solution
-    assert optimal_solution is not None
-    if SS.output_all_solutions:
-        all_solutions = SS.get_all_simplified_solution()
-        all_solutions_output_name = output_name.replace("optimal", "all")
-        all_solutions.to_csv(all_solutions_output_name, index=False)
-    if SS.output_model_selection_table:
-        output_model_selection_table = SS.elbow_search_df_strictly_decreasing
-        output_model_selection_table.to_csv(
-            f"{SS.tumour_id}_{SS.segment}_model_selection_table.csv", index=False
-        )
-    end_time = time.time()
-    if SS.debug:
-        total_run_time = round(end_time - start_time)
-        optimal_solution["run_time_seconds"] = total_run_time
-    optimal_solution.to_csv(output_name, index=False)
-    print(f"Segment {input_file_name} solved.")
-print("Done")
-print(
-    """
- _____ __    _____ _____ _____ _____
-|  _  |  |  |  _  |  _  |     |  _  |
-|     |  |__|   __|     |   --|     |
-|__|__|_____|__|  |__|__|_____|__|__|
-  /\\⌒⌒⌒/\\
-  (⦿   ⦿)
-  ( 'Y' )
-   (   )
-   (   )
-   (   )
-   (~ ~~~~~~~~~~)
-   ( ~ ~~   ~~  )
-   ( ~  ~ ~  ~  )
-   (~  ~~~~~   ~)
-    │ │     │ │
-    │ │     │ │
-"""
-)
+# initiate progress bar:
+if not config['preprocessing_config']['debug']:
+    progress_bar = tqdm(total=len(input_files), desc="Processing files", unit="file")
+    original_stdout = sys.stdout
+    if os.name == 'nt':  # Windows
+        sys.stdout = open(os.devnull, 'w')
+    else:  # Unix/Linux
+        sys.stdout = StringIO()  
+try:
+    for input_file_name in input_files:
+        output_name = "optimal" + input_file_name.split("ALPACA_input_table_")[1]
+        start_time = time.time()
+        SS = SegmentSolution(input_file_name, config)
+        SS.run_iterations()
+        SS.find_optimal_solution()
+        SS.get_solution()
+        optimal_solution = SS.optimal_solution
+        assert optimal_solution is not None
+        if SS.output_all_solutions:
+            all_solutions = SS.get_all_simplified_solution()
+            all_solutions_output_name = output_name.replace("optimal", "all")
+            all_solutions.to_csv(all_solutions_output_name, index=False)
+        if SS.output_model_selection_table:
+            output_model_selection_table = SS.elbow_search_df_strictly_decreasing
+            output_model_selection_table.to_csv(
+                f"{SS.tumour_id}_{SS.segment}_model_selection_table.csv", index=False
+            )
+        end_time = time.time()
+        if SS.debug:
+            total_run_time = round(end_time - start_time)
+            optimal_solution["run_time_seconds"] = total_run_time
+        else:
+            progress_bar.update(1)
+            progress_bar.set_description(f"Processing {input_file_name}")
+        optimal_solution.to_csv(output_name, index=False)
+        print(f"Segment {input_file_name} solved.")
+    print("Done")
+    print_logo()
+finally:
+    if not config['preprocessing_config']['debug']:
+        sys.stdout.close()
+        sys.stdout = original_stdout
+        progress_bar.close()
+
