@@ -3,4 +3,5 @@ __pycache__/*
 /data/output/example_cohort/cohort_outputs/all_solutions_combined.csv
 /.idea/*
 alpaca/__pycache__/*
-example_cohort/*
+examples/example_cohort/input/*
+examples/example_cohort/output/*
