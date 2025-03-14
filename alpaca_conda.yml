@@ -16,7 +16,7 @@ dependencies:
   - libcblas=3.9.0
   - libcxx=19.1.7
   - libffi=3.4.6
-  - libgfortran=5.0.0
+  - libgfortran
   - libgfortran5=13.2.0
   - liblapack=3.9.0
   - liblzma=5.6.4
