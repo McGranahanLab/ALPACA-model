@@ -2,7 +2,7 @@ import os
 import sys
 sys.path.append('.')
 from ALPACA_segment_solution_class import SegmentSolution
-from run_alpaca import solve
+from alpaca.run_alpaca import solve
 import pandas as pd
 
 tumour_id = 'SA1049'

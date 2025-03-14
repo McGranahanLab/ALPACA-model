@@ -3,7 +3,7 @@ import sys
 sys.path.append('.')
 from ALPACA_segment_solution_class import SegmentSolution
 
-from run_alpaca import solve
+from alpaca.run_alpaca import solve
 tumour_id = 'LTXSIM127'
 segment = '10_1018473_1437135'
 cohort = 'simulations'

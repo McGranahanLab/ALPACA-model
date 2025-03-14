@@ -2,39 +2,7 @@ import gurobipy as gp
 import pandas as pd
 import os
 from gurobipy import GRB
-
-
-def find_path_edges(branch, tree_edges):
-    branch_edges = []
-    for edge in tree_edges:
-        if (edge[0] in branch) and (edge[1] in branch):
-            branch_edges.append(edge)
-    return set(branch_edges)
-
-
-def get_tree_edges(tree_paths):
-    all_edges = list()
-    for path in tree_paths:
-        if len(path) == 2:
-            all_edges.append(tuple(path))
-        else:
-            for i in range(len(path) - 1):
-                all_edges.append((path[i], path[i + 1]))
-    unique_edges = set(all_edges)
-    return unique_edges
-
-
-def flat_list(target_list):
-    if isinstance(target_list[0], list):
-        return [item for sublist in target_list for item in sublist]
-    else:
-        return target_list
-
-
-def get_length_from_name(segment):
-    e = int(segment.split("_")[-1])
-    s = int(segment.split("_")[-2])
-    return e - s
+from utils import find_path_edges, get_tree_edges, flat_list, get_length_from_name
 
 
 class Model:
@@ -458,17 +426,6 @@ class Model:
             self.tree_edges = [edge for edge in self.tree_edges if edge[0] != "diploid"]
         # create variables for events on each edge:
 
-        """        for allele in ['A', 'B']:
-                    self.cpn_change_up[allele] = self.model.addVars(self.tree_edges, name=f'{allele}_cpn_change_up', vtype=GRB.BINARY)
-                    self.cpn_change_down[allele] = self.model.addVars(self.tree_edges, name=f'{allele}_cpn_change_down', vtype=GRB.BINARY)
-                    for edge in self.tree_edges:
-                        # each edge and each allele can have one change up or down. To reflect this we take the number of events (i.e. the magnitude of change) and binarize it to 0 and 1 states.
-                        self.model.addConstr(self.CN_diff_edges_amp[allele][edge] <= U * (self.cpn_change_up[allele][edge]), name=f'Ueps_constr1_{edge}_{allele}_up')
-                        self.model.addConstr(self.CN_diff_edges_amp[allele][edge] >= self.cpn_change_up[allele][edge], name=f'Ueps_constr2_{edge}_{allele}_up')
-                        self.model.addConstr(self.CN_diff_edges_del[allele][edge] <= U * (self.cpn_change_down[allele][edge]), name=f'Ueps_constr1_{edge}_{allele}_down')
-                        self.model.addConstr(self.CN_diff_edges_del[allele][edge] >= self.cpn_change_down[allele][edge], name=f'Ueps_constr2_{edge}_{allele}_down')
-        """
-
         for allele in ["A", "B"]:
             self.CN_diff_edges_amp[allele] = self.model.addVars(
                 self.tree_edges, name=f"amp_{allele}", vtype=GRB.INTEGER, lb=0
@@ -492,14 +449,6 @@ class Model:
                 )
                 # Constraint below ensures that deletion and amplification cannot be present on the same edge #
                 if self.exclusive_amp_del:
-                    # ::: quadratic implementation:
-                    # self.model.addConstr(self.CN_diff_edges_amp[allele][edge] * self.CN_diff_edges_del[allele][edge] == 0, name=f'{allele}_D_a_{edge}')
-                    # ::: linear implementation with big M:
-                    # M = 1000
-                    # exclusive_amp_del_bin_indicator = self.model.addVar(vtype=GRB.BINARY, name=f'binary_{allele}_{edge}')
-                    # self.model.addConstr(self.CN_diff_edges_amp[allele][edge] <= M * (1 - exclusive_amp_del_bin_indicator), name=f'amp_constr_{allele}_{edge}_exc_amp_del')
-                    # self.model.addConstr(self.CN_diff_edges_del[allele][edge] <= M * exclusive_amp_del_bin_indicator, name=f'del_constr_{allele}_{edge}_exc_amp_del')
-                    # linear implementation with amp/del variables:
                     U = 1000
                     # each edge and each allele can have one change up or down. To reflect this we take the number of events (i.e. the magnitude of change) and binarize it to 0 and 1 states.
                     self.model.addConstr(

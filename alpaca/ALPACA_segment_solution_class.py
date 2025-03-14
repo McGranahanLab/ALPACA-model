@@ -9,6 +9,7 @@ from scipy.stats import norm
 import typing
 from ALPACA_model_class import Model
 from typing import Optional, Dict, Any
+import time
 
 
 def ensure_elbow_strictly_decreasing(df):
@@ -71,7 +72,7 @@ def find_s_values(elbow_search_df, max_iterations, x="allowed_complexity", y="D_
 
 def missing_clones_inherit_from_children(optimal_solution, tree, cp_table):
     """
-    Only applies when a missing clone has exactly one child., Otherwise parsimony should be enough to find the correct solution.
+    Only applies when a missing clone has exactly one child, Otherwise parsimony should be enough to find the correct solution.
     """
     missing_clones = list(cp_table.loc[cp_table.sum(1) == 0].index)
     # exclude leaves as they cannot have any children:
@@ -175,14 +176,14 @@ def get_ci_table(input_table, tumour_dir, segment, ci_table_name="", CI=0.5):
                 [
                     "sample",
                     "segment",
-                    f"lower_CI_A",
-                    f"upper_CI_A",
-                    f"lower_CI_B",
-                    f"upper_CI_B",
+                    "lower_CI_A",
+                    "upper_CI_A",
+                    "lower_CI_B",
+                    "upper_CI_B",
                 ]
             ].drop_duplicates()
         except FileNotFoundError:
-            # TODO devise more sophisticated way to calculate CI
+            # create dummy CIs:
             print("No SNP table found, creating artificial CI table")
             ci_table = input_table[["sample", "segment"]].drop_duplicates().copy()
             for x in ["lower_CI_A", "upper_CI_A", "lower_CI_B", "upper_CI_B"]:
@@ -190,10 +191,10 @@ def get_ci_table(input_table, tumour_dir, segment, ci_table_name="", CI=0.5):
             for s in ci_table["sample"].unique():
                 A = input_table[input_table["sample"] == s].cpnA.median()
                 B = input_table[input_table["sample"] == s].cpnB.median()
-                ci_table.loc[ci_table["sample"] == s, f"lower_CI_A"] = A - 0.5
-                ci_table.loc[ci_table["sample"] == s, f"lower_CI_B"] = B - 0.5
-                ci_table.loc[ci_table["sample"] == s, f"upper_CI_A"] = A + 0.5
-                ci_table.loc[ci_table["sample"] == s, f"upper_CI_B"] = B + 0.5
+                ci_table.loc[ci_table["sample"] == s, "lower_CI_A"] = A - 0.5
+                ci_table.loc[ci_table["sample"] == s, "lower_CI_B"] = B - 0.5
+                ci_table.loc[ci_table["sample"] == s, "upper_CI_A"] = A + 0.5
+                ci_table.loc[ci_table["sample"] == s, "upper_CI_B"] = B + 0.5
         for allele in ["A", "B"]:
             ci_table[f"lower_CI_{allele}"] = ci_table[f"lower_CI_{allele}"].apply(
                 lambda x: max(x, 0)
@@ -302,6 +303,8 @@ def rescale_elbow_points(complexities, elbow):
 
 class SegmentSolution:
     def __init__(self, input_file_name: str, config: Optional[Dict[str, Any]] = None):
+        # get start time:
+        self.start_time = time.time()
         if config is None:
             config = {"preprocessing_config": {}, "model_config": {}}
         # Define default values:
@@ -333,14 +336,12 @@ class SegmentSolution:
         # default values present in the config object will overwrite the default values defined above
         for key, value in self.config["preprocessing_config"].items():
             setattr(self, key, value)
-        self.tumour_id, self.segment = split_input_file_name(input_file_name)
+        self.input_file_name = input_file_name
+        self.tumour_id, self.segment = split_input_file_name(self.input_file_name)
         # define tumour input directory depending on the run environment:
-        if "NXF_VER" in os.environ:  # running on Nextflow TODO move out of the class
-            self.tumour_dir = f"{self.input_data_directory}/{self.tumour_id}"
-        else:
-            self.tumour_dir = f".."
+        self.set_directories()
         # load fractional copy numbers:
-        self.input_table = pd.read_csv(input_file_name).sort_values("sample")
+        self.input_table = pd.read_csv(f'{self.segments_dir}/{input_file_name}').sort_values("sample")
         # load tree:
         self.tree = read_tree_json(f"{self.tumour_dir}/tree_paths.json")
         # load clone proportions:
@@ -526,3 +527,42 @@ class SegmentSolution:
         rescaled = rescale_elbow_points(complexities, elbow)
         all_solutions["elbow_offset"] = all_solutions.complexity.map(rescaled)
         return all_solutions
+
+    def set_directories(self):
+        ''' Try to determine if the script is run from nextflow or not. In Nextflow, input files (copy number per segment),
+            are expected to be in working directory. Otherwise, segments are expected to be in tumour_dir/segments.
+        '''
+        def is_running_in_nextflow():
+            """
+            Checks if the script is running within a Nextflow process.
+
+            Returns:
+                bool: True if running in Nextflow, False otherwise.
+            """
+            return "NXF_PID" in os.environ or "NXF_TEMP_DIR" in os.environ or "NXF_VER" in os.environ
+        self.tumour_dir = f"{self.input_data_directory}/{self.tumour_id}"
+        if is_running_in_nextflow():
+            self.segments_dir = "."
+        else:
+            self.segments_dir = f"{self.tumour_dir}/segments"
+           
+    def save_output(self):
+        end_time = time.time()
+        output_name = "optimal_" + self.input_file_name.split("ALPACA_input_table_")[1]
+        output_dir = self.config['preprocessing_config']['output_directory']
+        output_path = os.path.join(output_dir, output_name)
+        os.makedirs(output_dir, exist_ok=True)
+        assert self.optimal_solution is not None
+        if self.output_all_solutions:
+            all_solutions = self.get_all_simplified_solution()
+            all_solutions_output_path = output_path.replace("optimal", "all")
+            all_solutions.to_csv(all_solutions_output_path, index=False)
+        if self.output_model_selection_table:
+            output_model_selection_table = self.elbow_search_df_strictly_decreasing
+            output_model_selection_table.to_csv(
+                f"{output_dir}/{self.tumour_id}_{self.segment}_model_selection_table.csv", index=False
+            )
+        if self.debug:
+            total_run_time = round(end_time - self.start_time)
+            self.optimal_solution["run_time_seconds"] = total_run_time
+        self.optimal_solution.to_csv(output_path, index=False)
