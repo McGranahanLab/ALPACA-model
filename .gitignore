@@ -5,3 +5,4 @@ __pycache__/*
 alpaca/__pycache__/*
 examples/example_cohort/input/*
 examples/example_cohort/output/*
+.vscode/settings.json
