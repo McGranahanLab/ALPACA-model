@@ -82,7 +82,7 @@ def calculate_confidence_intervals(seg_sample_df, ci_value=0.95, n_bootstrap=100
     if balanced + imbalanced == 0:
         # TODO log this error
         print("Segment is neither balanced nor imbalanced")
-        raise ValueError
+        # raise ValueError
     baf_a = seg_sample_df.query('phasing == "a"')["baf"].mean()
     baf_b = seg_sample_df.query('phasing == "b"')["baf"].mean()
     if math.isnan(baf_a) and math.isnan(baf_b):
