@@ -1,0 +1,4 @@
+test_input/*
+convert_refphase_output/__pycache__/*
+convert_refphase_output/testing_notebook.ipynb
+ascat_converter_alpaca.R

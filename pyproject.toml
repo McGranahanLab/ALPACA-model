@@ -22,15 +22,20 @@ dependencies = [
 ]
 
 [tool.hatch.build]
+include = [
+    "/alpaca",
+    "/alpaca/submodules"
+]
 exclude = [
     ".*",           
     "dev/",
     "__pycache__/"
 ]
 
+
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [project.scripts]
 alpaca = "alpaca.__main__:main"
-
+input_conversion = "alpaca.scripts:input_conversion"

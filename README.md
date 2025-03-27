@@ -145,8 +145,7 @@ refphase_rData="examples/simple_pipeline/${tumour_id}/refphase/${tumour_id}-refp
 CONIPHER_tree_object="examples/simple_pipeline/${tumour_id}/conipher/output/${tumour_id}.tree.RDS"
 output_dir="examples/simple_pipeline/${tumour_id}/alpaca/input"
 
-
-bash run_conversion.sh --tumour_id $tumour_id --refphase_rData $refphase_rData --CONIPHER_tree_object $CONIPHER_tree_object --output_dir $output_dir
+input_conversion --tumour_id $tumour_id --refphase_rData $refphase_rData --CONIPHER_tree_object $CONIPHER_tree_object --output_dir $output_dir
 ```
 
 Make sure that your 'tumour_id' is the same as 'CASE_ID' in CONIPHER output and as 'patient_tumour' in Refphase output.
