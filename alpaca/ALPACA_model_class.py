@@ -2,7 +2,7 @@ import gurobipy as gp
 import pandas as pd
 import os
 from gurobipy import GRB
-from utils import find_path_edges, get_tree_edges, flat_list, get_length_from_name
+from .utils import find_path_edges, get_tree_edges, flat_list, get_length_from_name
 
 
 class Model:

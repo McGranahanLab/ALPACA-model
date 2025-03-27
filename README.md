@@ -5,6 +5,10 @@ TODO
 create input with ci_tables - copy from simple pipeline
 remove auth from the repo
 
+Install package with:
+pip install dist/*.whl
+
+
 # Software requirements
 
 # ALPACA

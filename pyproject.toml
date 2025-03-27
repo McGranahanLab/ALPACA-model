@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "alpaca"
+version = "0.1.0"
+description = "Package for ALPACA model - Allele-specific Phylogenetic Analysis of Copy-number Aberrations"
+authors = [{ name = "Piotr Pawlik"}]
+license = { file = "LICENSE" }
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",  
+    "pandas",
+    "gurobipy",
+    "kneed",
+    "scipy",
+    "tqdm"
+
+
+]
+
+[tool.hatch.build]
+exclude = [
+    ".*",           
+    "dev/",
+    "__pycache__/"
+]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[project.scripts]
+alpaca = "alpaca.__main__:main"
+

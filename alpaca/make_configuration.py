@@ -1,45 +1,69 @@
 import argparse
 import os
+import sys
+
+"""
+ALPACA can operate in two modes: 'tumour' and 'segment'.
+In default 'tumour' mode, expected input is a directory with all the inputs required for a single tumour:
+fractional copy numbers, clone proportions, confidence intervals and tree.
+In this mode, ALPACA will write a single output file for each tumour.
+In 'segment' mode, expected input is an array of files to segment files (can be from different tumours).
+In this mode, ALPACA will create separate outputs for each segment.
+In this mode, ALPACA also requires the input_data_directory to be specified: it is the parent directory
+containing subdirectories for each tumour. ALPACA will automatically find the correct tumour subdirectory
+by parsing the name of each of the input files.
+"""
 
 
 def get_parser():
     parser = argparse.ArgumentParser(
         description="Run ALPACA with specified parameters."
     )
+    # SEGMENT mode arguments:
     parser.add_argument(
         "--input_data_directory",
         type=str,
-        required=True,
+        required=False,
         help="Directory where input data is stored. Should contain subdirectories for each tumour",
     )
-
+    parser.add_argument(
+        "--input_files",
+        nargs="+",
+        type=str,
+        required=False,
+        help="Space-separated list of input tables for one or multiple segments.",
+    )
+    # TUMOUR mode arguments:
+    parser.add_argument(
+        "--input_tumour_directory",
+        type=str,
+        required=False,
+        help="Directory with all the inputs required for a single tumour.",
+    )
+    # Common arguments:
+    parser.add_argument(
+        "--mode",
+        type=str,
+        default="tumour",
+        help="Mode of operation. If 'tumour', expect single file with all the segments and output a single file. If 'segment' expect array of files to segment files (can be from different tumours) and create separate outputs for each segment.",
+    )
     parser.add_argument(
         "--output_directory",
         type=str,
         default="./",
         help="Directory where output data is stored. Defaults to current directory.",
     )
-
     parser.add_argument(
         "--use_two_objectives",
         type=int,
         default=False,
         help="Whether to use two objectives or not. First objective minimises number of segments outside CI, second objective minimises error.",
     )
-
     parser.add_argument(
         "--use_minimise_events_to_diploid",
         type=int,
         default=False,
         help="Whether to minimize events to diploid or not. If true, ALPACA will introduce diploid pseudo-clone at the root of the tree.",
-    )
-
-    parser.add_argument(
-        "--input_files",
-        nargs="+",
-        type=str,
-        required=True,
-        help="Space-separated list of input tables for one or multiple segments.",
     )
     parser.add_argument(
         "--prevent_increase_from_zero_flag", type=int, default=1, help=""
@@ -47,7 +71,6 @@ def get_parser():
     parser.add_argument(
         "--add_event_count_constraints_flag", type=int, default=1, help=""
     )
-
     parser.add_argument(
         "--add_allow_only_one_non_directional_event_flag",
         type=int,
@@ -83,7 +106,6 @@ def get_parser():
     parser.add_argument(
         "--ccp", default=0, type=int, help="calibrate clone proportions"
     )
-
     parser.add_argument(
         "--ci_table_name",
         default="ci_table.csv",
@@ -95,10 +117,28 @@ def get_parser():
     return parser
 
 
+def validate_args(args):
+    if args.mode == "tumour":
+        if not args.input_tumour_directory:
+            print(
+                "Error: --input_tumour_directory is required when --mode is 'tumour'.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:  # mode is 'segment'
+        if not args.input_data_directory or not args.input_files:
+            print(
+                "Error: --input_data_directory and --input_files are required when --mode is 'segment'.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+
 def make_config(args_in):
     ENV = os.environ.get("APP_ENV", "prod").lower()
     parser = get_parser()
     args, remaining_args = parser.parse_known_args(args_in)
+    validate_args(args)
     # make config dictionary
     model_config = {
         "use_two_objectives": args.use_two_objectives,
@@ -113,14 +153,17 @@ def make_config(args_in):
     }
 
     preprocessing_config = {
+        "mode": args.mode,
         "ci_table_name": args.ci_table_name,
-        "input_data_directory": args.input_data_directory,
         "debug": args.debug,
         "env": ENV,
-        "input_files": args.input_files[0].strip().split(" "),
         "output_directory": args.output_directory,
     }
-
+    if args.mode == "tumour":
+        preprocessing_config["input_tumour_directory"] = args.input_tumour_directory
+    else:
+        preprocessing_config["input_files"] = (args.input_files[0].strip().split(" "),)
+        preprocessing_config["input_data_directory"] = args.input_data_directory
     if ENV == "dev":
         print("Starting ALPACA in development mode")
         from dev.parse_optional_args import get_config

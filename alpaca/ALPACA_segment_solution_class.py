@@ -7,7 +7,7 @@ import math
 import kneed
 from scipy.stats import norm
 import typing
-from ALPACA_model_class import Model
+from .ALPACA_model_class import Model
 from typing import Optional, Dict, Any
 import time
 
@@ -341,7 +341,9 @@ class SegmentSolution:
         # define tumour input directory depending on the run environment:
         self.set_directories()
         # load fractional copy numbers:
-        self.input_table = pd.read_csv(f'{self.segments_dir}/{input_file_name}').sort_values("sample")
+        self.input_table = pd.read_csv(
+            f"{self.segments_dir}/{input_file_name}"
+        ).sort_values("sample")
         # load tree:
         self.tree = read_tree_json(f"{self.tumour_dir}/tree_paths.json")
         # load clone proportions:
@@ -529,9 +531,10 @@ class SegmentSolution:
         return all_solutions
 
     def set_directories(self):
-        ''' Try to determine if the script is run from nextflow or not. In Nextflow, input files (copy number per segment),
-            are expected to be in working directory. Otherwise, segments are expected to be in tumour_dir/segments.
-        '''
+        """Try to determine if the script is run from nextflow or not. In Nextflow, input files (copy number per segment),
+        are expected to be in working directory. Otherwise, segments are expected to be in tumour_dir/segments.
+        """
+
         def is_running_in_nextflow():
             """
             Checks if the script is running within a Nextflow process.
@@ -539,17 +542,22 @@ class SegmentSolution:
             Returns:
                 bool: True if running in Nextflow, False otherwise.
             """
-            return "NXF_PID" in os.environ or "NXF_TEMP_DIR" in os.environ or "NXF_VER" in os.environ
+            return (
+                "NXF_PID" in os.environ
+                or "NXF_TEMP_DIR" in os.environ
+                or "NXF_VER" in os.environ
+            )
+
         self.tumour_dir = f"{self.input_data_directory}/{self.tumour_id}"
         if is_running_in_nextflow():
             self.segments_dir = "."
         else:
             self.segments_dir = f"{self.tumour_dir}/segments"
-           
+
     def save_output(self):
         end_time = time.time()
         output_name = "optimal_" + self.input_file_name.split("ALPACA_input_table_")[1]
-        output_dir = self.config['preprocessing_config']['output_directory']
+        output_dir = self.config["preprocessing_config"]["output_directory"]
         output_path = os.path.join(output_dir, output_name)
         os.makedirs(output_dir, exist_ok=True)
         assert self.optimal_solution is not None
@@ -560,7 +568,8 @@ class SegmentSolution:
         if self.output_model_selection_table:
             output_model_selection_table = self.elbow_search_df_strictly_decreasing
             output_model_selection_table.to_csv(
-                f"{output_dir}/{self.tumour_id}_{self.segment}_model_selection_table.csv", index=False
+                f"{output_dir}/{self.tumour_id}_{self.segment}_model_selection_table.csv",
+                index=False,
             )
         if self.debug:
             total_run_time = round(end_time - self.start_time)
