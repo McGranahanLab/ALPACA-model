@@ -2,6 +2,7 @@ import pandas as pd
 import argparse
 import os
 from functions import calculate_confidence_intervals
+
 # arguments
 parser = argparse.ArgumentParser(
     description="Calculate confidence intervals from refphase output"
@@ -87,7 +88,9 @@ refphase_segments["segment"] = (
 # segments_above_threshold = SNP_count[SNP_count>args.heterozygous_SNPs_threshold]
 
 # use this to use number of heterozygous SNPs in each sample:
-refphase_segments = refphase_segments.groupby('segment').filter(lambda x: (x['heterozygous_SNP_number'] >= args.heterozygous_SNPs_threshold).all())
+refphase_segments = refphase_segments.groupby("segment").filter(
+    lambda x: (x["heterozygous_SNP_number"] >= args.heterozygous_SNPs_threshold).all()
+)
 
 
 ## calculate confidence intervals:
@@ -105,16 +108,14 @@ snps_with_segments = snps_with_segments[
 ]
 # add purity and ploidy information
 snps_with_segments_purity_ploidy = snps_with_segments.merge(
-    refphase_purity_ploidy, left_on="sample",right_on='sample_id', how="inner"
+    refphase_purity_ploidy, left_on="sample", right_on="sample_id", how="inner"
 )
 
 
 # estimate the confidence intervals:
 confidence_intervals = (
     snps_with_segments_purity_ploidy.groupby(["segment", "sample"])
-    .apply(
-        calculate_confidence_intervals, ci_value=ci_value, n_bootstrap=n_bootstrap
-    )
+    .apply(calculate_confidence_intervals, ci_value=ci_value, n_bootstrap=n_bootstrap)
     .reset_index()
 )
 
@@ -148,11 +149,11 @@ for allele in ["A", "B"]:
 # TODO after testing, remove redundant columns"
 # ci_table.drop(columns=["cn_a", "cn_b","cpnA", "cpnB", "was_cn_updated"], inplace=True)
 ci_table.to_csv(f"{output_dir}/ci_table.csv", index=False)
-print(f'{tumour_id} done')
+print(f"{tumour_id} done")
 
 # keep only relevant columns:
 print(f"Creating ALPACA input table for {tumour_id}")
-alpaca_input = ci_table[["tumour_id","sample","segment", "cpnA", "cpnB"]].copy()
+alpaca_input = ci_table[["tumour_id", "sample", "segment", "cpnA", "cpnB"]].copy()
 # write to file:
 
 alpaca_input.to_csv(f"{output_dir}/ALPACA_input_table.csv", index=False)

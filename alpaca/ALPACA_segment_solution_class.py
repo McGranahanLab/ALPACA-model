@@ -1,4 +1,3 @@
-import json
 import os
 from datetime import datetime
 import pandas as pd
@@ -7,9 +6,10 @@ import math
 import kneed
 from scipy.stats import norm
 import typing
-from .ALPACA_model_class import Model
 from typing import Optional, Dict, Any
 import time
+from .ALPACA_model_class import Model
+from .utils import read_tree_json
 
 
 def ensure_elbow_strictly_decreasing(df):
@@ -129,11 +129,6 @@ def remove_small_clones(cp_table, tree):
                 pass
     return cp_table
 
-
-def read_tree_json(json_path: str):
-    with open(json_path, "r") as f:
-        tree = json.load(f)
-    return tree
 
 
 def split_input_file_name(input_file_name: str):

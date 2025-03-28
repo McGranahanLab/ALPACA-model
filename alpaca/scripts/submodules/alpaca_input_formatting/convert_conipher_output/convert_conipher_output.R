@@ -1,4 +1,4 @@
-library(rjson)
+library(jsonlite)
 library(CONIPHER)
 library(argparse)
 

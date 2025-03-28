@@ -1,6 +1,7 @@
 import os
 import pandas as pd
 from pathlib import Path
+import json
 
 
 def split_to_segments(tumour_dir: str) -> list[str]:
@@ -50,6 +51,12 @@ def set_run_mode(config: dict) -> tuple[dict, str]:
     return config, run_mode
 
 
+def read_tree_json(json_path: str) -> list[list[str]]:
+    with open(json_path, "r") as f:
+        tree = json.load(f)
+    return tree
+
+
 def find_path_edges(branch, tree_edges):
     branch_edges = []
     for edge in tree_edges:
@@ -68,6 +75,15 @@ def get_tree_edges(tree_paths):
                 all_edges.append((path[i], path[i + 1]))
     unique_edges = set(all_edges)
     return unique_edges
+
+
+def find_parent(tree_paths, clone_name):
+    for branch in tree_paths:
+        if branch[0] == clone_name:
+            return 'diploid'
+        if clone_name in branch:
+            clone_index = branch.index(clone_name)
+            return branch[clone_index-1]
 
 
 def flat_list(target_list):
