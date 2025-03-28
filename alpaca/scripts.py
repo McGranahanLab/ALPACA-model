@@ -91,11 +91,9 @@ def run_get_cn_change_to_ancestor():
         output_dir = os.path.dirname(args.output_path)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
-
-        cn_change_to_ancestor_df.to_csv(args.output_path, index=False)
-        logging.info(
-            f"Analysis completed successfully. Output saved to: {args.output_path}"
-        )
+        output_name = f"{args.output_path}/cn_change_to_ancestor.csv"
+        cn_change_to_ancestor_df.to_csv(output_name, index=False)
+        logging.info(f"Analysis completed successfully. Output saved to: {output_name}")
 
     except Exception as e:
         logging.exception(f"An error occurred during analysis: {e}")

@@ -1,7 +1,7 @@
 library(optparse)
 
 # Create option list
-option_list <- list(
+option_list = list(
   make_option(c("--refphase_rData"), type="character", 
               help="path to refphase .RData file"),
   make_option(c("--output_dir"), type="character", 
@@ -9,17 +9,17 @@ option_list <- list(
 )
 
 # Create the parser
-parser <- OptionParser(
+parser = OptionParser(
   description = "Extract tsv files from refphase output",
   option_list = option_list
 )
 
 # Parse the arguments
-args <- parse_args(parser)
+args = parse_args(parser)
 
 # Extract values
-results_object <- args$refphase_rData
-output_dir <- args$output_dir
+results_object = args$refphase_rData
+output_dir = args$output_dir
 print('Loading refphase results from .RData file')
 print(results_object)
 tmp = load(results_object)

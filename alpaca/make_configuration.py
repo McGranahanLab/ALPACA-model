@@ -54,6 +54,12 @@ def get_parser():
         help="Directory where output data is stored. Defaults to current directory.",
     )
     parser.add_argument(
+        "--gurobi_logs",
+        type=str,
+        default="",
+        help="Directory where gurobi logs should be stored. If no value is speficied, logs will not be saved.",
+    )
+    parser.add_argument(
         "--use_two_objectives",
         type=int,
         default=False,
@@ -150,8 +156,8 @@ def make_config(args_in):
         "homo_del_size_limit": args.homo_del_size_limit,
         "time_limit": args.time_limit,
         "cpus": args.cpus,
+        "gurobi_logs": args.gurobi_logs,
     }
-
     preprocessing_config = {
         "mode": args.mode,
         "ci_table_name": args.ci_table_name,

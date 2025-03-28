@@ -8,8 +8,8 @@ from scipy.stats import norm
 import typing
 from typing import Optional, Dict, Any
 import time
-from .ALPACA_model_class import Model
-from .utils import read_tree_json
+from alpaca.ALPACA_model_class import Model
+from alpaca.utils import read_tree_json
 
 
 def ensure_elbow_strictly_decreasing(df):

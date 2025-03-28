@@ -2,7 +2,12 @@ import gurobipy as gp
 import pandas as pd
 import os
 from gurobipy import GRB
-from .utils import find_path_edges, get_tree_edges, flat_list, get_length_from_name
+from alpaca.utils import (
+    find_path_edges,
+    get_tree_edges,
+    flat_list,
+    get_length_from_name,
+)
 
 
 class Model:
@@ -41,6 +46,7 @@ class Model:
         self.cpus = 2
         self.BestObjStop = None
         self.license = "local"
+        self.gurobi_logs = ""
 
         # override defaults:
         self.__dict__.update(kwargs)
@@ -105,15 +111,16 @@ class Model:
             f"===={self.tumour_id}_{segment}_allowed_complexity_{self.allowed_tree_complexity}===="
         )
         # activate gurobi license:
+        # TODO get license from environment variables
         if self.license == "remote":
             options = {
-                "WLSACCESSID": os.getenv(
-                    "WLSACCESSID", "306b7e47-cdee-4e94-ab85-de6fca0dd709"
+                "WLSACCESSID": os.getenv("WLSACCESSID", ""),
+                "WLSSECRET": os.getenv("WLSSECRET", ""),
+                "LICENSEID": int(
+                    os.getenv(
+                        "LICENSEID",
+                    )
                 ),
-                "WLSSECRET": os.getenv(
-                    "WLSSECRET", "c7349a51-4893-47fa-81d4-714b0445a9e8"
-                ),
-                "LICENSEID": int(os.getenv("LICENSEID", 2507321)),
             }
             env = gp.Env(params=options)
             self.model = gp.Model("ALPACA", env=env)
@@ -121,6 +128,12 @@ class Model:
         else:
             print(f"Using local license")
             self.model = gp.Model("ALPACA")
+        # set logging:
+        if self.gurobi_logs == "":
+            self.model.setParam("OutputFlag", 0)
+        else:
+            self.model.setParam("LogFile", self.gurobi_logs)
+            self.model.setParam("LogToConsole", 0)
         self.model.params.TimeLimit = self.time_limit
         self.model.params.Threads = self.cpus * 2
         if self.BestObjStop:

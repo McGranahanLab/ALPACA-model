@@ -3,9 +3,9 @@ import os
 import sys
 from tqdm import tqdm
 from io import StringIO
-from .ALPACA_segment_solution_class import SegmentSolution
-from .utils import print_logo, concatenate_output, set_run_mode
-from .make_configuration import make_config
+from alpaca.ALPACA_segment_solution_class import SegmentSolution
+from alpaca.utils import print_logo, concatenate_output, set_run_mode
+from alpaca.make_configuration import make_config
 
 
 def main():
