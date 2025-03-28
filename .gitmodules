@@ -1,3 +1,0 @@
-[submodule "submodules/alpaca_input_formatting"]
-	path = submodules/alpaca_input_formatting
-	url = https://github.com/McGranahanLab/alpaca_input_formatting.git
