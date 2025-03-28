@@ -48,10 +48,10 @@ def calculate_confidence_intervals_logr(seg_sample_df, ci_value=0.95, n_bootstra
         # to avoid division by zero in homozygous deletions:
         a_frac, b_frac = 0.5, 0.5
     # apply the ratio to bounds:
-    ## prevent negative values
+    # prevent negative values
     lower_CI_A = max(lower_bound * a_frac, 0)
     lower_CI_B = max(lower_bound * b_frac, 0)
-    ## ci range cannot be 0, this ensures that minimum span will be 0.001
+    # ci range cannot be 0, this ensures that minimum span will be 0.001
     upper_CI_A = max(upper_bound * a_frac, 0.001)
     upper_CI_B = max(upper_bound * b_frac, 0.001)
 

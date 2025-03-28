@@ -65,25 +65,25 @@ def find_path_edges(branch, tree_edges):
     return set(branch_edges)
 
 
-def get_tree_edges(tree_paths):
+def get_tree_edges(tree):
     all_edges = list()
-    for path in tree_paths:
-        if len(path) == 2:
-            all_edges.append(tuple(path))
+    for branch in tree:
+        if len(branch) == 2:
+            all_edges.append(tuple(branch))
         else:
-            for i in range(len(path) - 1):
-                all_edges.append((path[i], path[i + 1]))
+            for i in range(len(branch) - 1):
+                all_edges.append((branch[i], branch[i + 1]))
     unique_edges = set(all_edges)
     return unique_edges
 
 
-def find_parent(tree_paths, clone_name):
-    for branch in tree_paths:
+def find_parent(tree, clone_name):
+    for branch in tree:
         if branch[0] == clone_name:
-            return 'diploid'
+            return "diploid"
         if clone_name in branch:
             clone_index = branch.index(clone_name)
-            return branch[clone_index-1]
+            return branch[clone_index - 1]
 
 
 def flat_list(target_list):

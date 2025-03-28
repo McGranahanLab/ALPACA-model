@@ -93,7 +93,7 @@ refphase_segments = refphase_segments.groupby("segment").filter(
 )
 
 
-## calculate confidence intervals:
+# calculate confidence intervals:
 print(f"Calculating confidence intervals for {tumour_id}")
 # assign SNPS to segments:
 snps_with_segments = refphase_snps.merge(

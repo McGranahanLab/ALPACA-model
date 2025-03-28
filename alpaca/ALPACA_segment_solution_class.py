@@ -130,7 +130,6 @@ def remove_small_clones(cp_table, tree):
     return cp_table
 
 
-
 def split_input_file_name(input_file_name: str):
     stripped_name = input_file_name.split("ALPACA_input_table_")[1]
     assert stripped_name.count("_") == 3, "Input name has to many underscores"
