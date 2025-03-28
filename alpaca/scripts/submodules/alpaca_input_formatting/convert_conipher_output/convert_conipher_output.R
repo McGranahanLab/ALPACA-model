@@ -1,11 +1,6 @@
 library(jsonlite)
 library(CONIPHER)
-library(argparse)
-
-parser = ArgumentParser(description = "Extract clone proportions and tree from CONIPHER output")
-parser$add_argument("--CONIPHER_tree_object",type = "character",help = "path to CONIPHER tree object")
-parser$add_argument("--output_dir",type = "character",help = "output directory")
-args = parser$parse_args()
+library(optparse)
 
 
 get_cp_table = function(alt_trees, alt_tree_id, clonality_table, ccf_cluster_table, trunk){
@@ -50,8 +45,27 @@ extractTreeGraphPaths = function(tree_graph){
   }
 
 
-tree_object = readRDS(args$CONIPHER_tree_object)
-output_dir = args$output_dir
+
+# Create option list
+option_list <- list(
+  make_option(c("--CONIPHER_tree_object"), type="character", 
+              help="path to CONIPHER tree object"),
+  make_option(c("--output_dir"), type="character", 
+              help="output directory")
+)
+
+# Create the parser
+parser <- OptionParser(
+  description = "Extract clone proportions and tree from CONIPHER output",
+  option_list = option_list
+)
+
+# Parse the arguments
+args <- parse_args(parser)
+
+# Read the tree object and set output directory
+tree_object <- readRDS(args$CONIPHER_tree_object)
+output_dir <- args$output_dir
 
 default_tree = tree_object$graph_pyclone$default_tree
 tree_paths = extractTreeGraphPaths(tree_graph = default_tree)
