@@ -35,20 +35,24 @@ parser.add_argument(
     help="Minimum number of heterozygous SNPs to consider a segment. Segments with fewer heterozygous SNPs will be discarded.",
 )
 parser.add_argument(
-    "--ci_value", type=float, default=0.5, help="Confidence interval value"
+    "--ci_value", type=float, default=0.5, help="Confidence interval value."
 )
 parser.add_argument(
-    "--n_bootstrap", type=int, default=100, help="Number of bootstrap samples"
+    "--n_bootstrap", type=int, default=100, help="Number of bootstrap samples."
 )
+parser.add_argument(
+    "--split_segments", type=bool, default=False, help="Split input into separate files for each segment. Useful for parallel processing."
+)
+
 
 args = parser.parse_args()
 tumour_id = args.tumour_id
 output_dir = args.output_dir
 ci_value = args.ci_value
 n_bootstrap = args.n_bootstrap
+split_segments = args.split_segments
 # create output directory:
-output_dir_segments = f"{output_dir}/segments"
-os.makedirs(output_dir_segments, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
 
 # read data
 refphase_segments = pd.read_csv(args.refphase_segments, sep="\t")
@@ -146,21 +150,24 @@ for allele in ["A", "B"]:
         ci_table[f"cpn{allele}"] < ci_table[f"upper_CI_{allele}"]
     ), f"cpn{allele} < upper_CI_{allele}"
 
-# TODO after testing, remove redundant columns"
-# ci_table.drop(columns=["cn_a", "cn_b","cpnA", "cpnB", "was_cn_updated"], inplace=True)
+alpaca_input = ci_table.copy()
+ci_table.drop(columns=["cn_a", "cn_b","cpnA", "cpnB", "was_cn_updated"], inplace=True)
 ci_table.to_csv(f"{output_dir}/ci_table.csv", index=False)
 print(f"{tumour_id} done")
 
 # keep only relevant columns:
 print(f"Creating ALPACA input table for {tumour_id}")
-alpaca_input = ci_table[["tumour_id", "sample", "segment", "cpnA", "cpnB"]].copy()
+alpaca_input = alpaca_input[["tumour_id", "sample", "segment", "cpnA", "cpnB"]]
 # write to file:
 
 alpaca_input.to_csv(f"{output_dir}/ALPACA_input_table.csv", index=False)
 
 # split input into separate files for each segment to faciliate parallel processing:
-for segment in alpaca_input["segment"].unique():
-    alpaca_input[alpaca_input["segment"] == segment].to_csv(
-        f"{output_dir_segments}/ALPACA_input_table_{tumour_id}_{segment}.csv",
-        index=False,
-    )
+if split_segments:
+    output_dir_segments = f"{output_dir}/segments"
+    os.makedirs(output_dir_segments, exist_ok=True)
+    for segment in alpaca_input["segment"].unique():
+        alpaca_input[alpaca_input["segment"] == segment].to_csv(
+            f"{output_dir_segments}/ALPACA_input_table_{tumour_id}_{segment}.csv",
+            index=False,
+        )
