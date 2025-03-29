@@ -41,7 +41,10 @@ parser.add_argument(
     "--n_bootstrap", type=int, default=100, help="Number of bootstrap samples."
 )
 parser.add_argument(
-    "--split_segments", type=bool, default=False, help="Split input into separate files for each segment. Useful for parallel processing."
+    "--split_segments",
+    type=bool,
+    default=False,
+    help="Split input into separate files for each segment. Useful for parallel processing.",
 )
 
 
@@ -151,7 +154,7 @@ for allele in ["A", "B"]:
     ), f"cpn{allele} < upper_CI_{allele}"
 
 alpaca_input = ci_table.copy()
-ci_table.drop(columns=["cn_a", "cn_b","cpnA", "cpnB", "was_cn_updated"], inplace=True)
+ci_table.drop(columns=["cn_a", "cn_b", "cpnA", "cpnB", "was_cn_updated"], inplace=True)
 ci_table.to_csv(f"{output_dir}/ci_table.csv", index=False)
 print(f"{tumour_id} done")
 
