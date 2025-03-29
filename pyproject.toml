@@ -29,6 +29,7 @@ include = [
 exclude = [
     ".*",           
     "dev/",
+    "tests/",
     "__pycache__/"
 ]
 
