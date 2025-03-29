@@ -59,6 +59,7 @@ refphase_purity_ploidy_path="${output_dir}/purity_ploidy.tsv"
 
 echo "Converting REFPHASE output"
 python3 "${SCRIPT_DIR}/convert_refphase_output/convert_refphase.py" \
+    --tumour_id $tumour_id \
     --output_dir $output_dir \
     --refphase_segments $refphase_segments_path \
     --refphase_snps $refphase_snps_path \
