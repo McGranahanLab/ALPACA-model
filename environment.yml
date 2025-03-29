@@ -11,5 +11,4 @@ dependencies:
   - openssl
   - pandas
   - tqdm
-  - setuptools
   - gurobi::gurobi

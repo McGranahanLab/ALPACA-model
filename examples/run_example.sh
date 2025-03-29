@@ -1,9 +1,7 @@
 #!/bin/bash
-# run this from examples:
-cd examples || exit
 tumour_id=LTX0530
-input_tumour_directory="example_cohort/input/${tumour_id}"
-output_directory="example_cohort/output/${tumour_id}"
+input_tumour_directory="examples/example_cohort/input/${tumour_id}"
+output_directory="examples/example_cohort/output/${tumour_id}"
 
 echo "Tumour ID: ${tumour_id}"
 

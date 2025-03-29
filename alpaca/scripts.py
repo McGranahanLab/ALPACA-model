@@ -1,7 +1,7 @@
 import os
 import subprocess
 import sys
-import pkg_resources
+from importlib.resources import files
 from alpaca.analysis import get_cn_change_to_ancestor
 import argparse
 
@@ -21,18 +21,19 @@ def input_conversion():
     """
     print("Running input_conversion - it may take a few minutes")
     try:
+        # check if all file in sys.argv exist:
+        for i, arg in enumerate(sys.argv[1:], start=1):
+            if '=' not in arg and ('/' in arg or '\\' in arg or '.' in arg):
+                exists = os.path.exists(arg)
+                print(f"Argument {i} ({arg}): {'Exists' if exists else 'DOES NOT EXIST'}")
         # Locate the input_conversion.sh script
-        script_path = pkg_resources.resource_filename(
-            "alpaca", "scripts/submodules/alpaca_input_formatting/input_conversion.sh"
-        )
-
+        script_path = str(files("alpaca").joinpath("scripts/submodules/alpaca_input_formatting/input_conversion.sh"))
+        print(script_path)
         # Locate the submodules directory
-        submodules_path = pkg_resources.resource_filename(
-            "alpaca", "scripts/submodules"
-        )
+        submodules_path = str(files("alpaca").joinpath("scripts/submodules"))
 
         # Ensure the script is executable
-        os.chmod(script_path, 0o755)
+        # os.chmod(script_path, 0o755)
 
         # Set environment variable to help script locate its dependencies
         env = os.environ.copy()
@@ -46,7 +47,9 @@ def input_conversion():
             capture_output=True,
             env=env,
         )
-        print(result.stdout)
+        print(f"Return code: {result.returncode}")
+        print(f"Output: {result.stdout}")
+        print(f"Stderr: {result.stderr}")
         return 0
     except subprocess.CalledProcessError as e:
         print(f"Error executing input_conversion: {e.stderr}", file=sys.stderr)

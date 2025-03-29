@@ -26,6 +26,10 @@ include = [
     "/alpaca",
     "/alpaca/submodules"
 ]
+
+[tool.hatch.envs.dev.scripts]
+debug-input = "python -m pdb -c continue -m alpaca.scripts input_conversion {args}"
+
 exclude = [
     ".*",           
     "dev/",
