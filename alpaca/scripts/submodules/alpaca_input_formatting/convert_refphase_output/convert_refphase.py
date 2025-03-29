@@ -7,9 +7,6 @@ from functions import calculate_confidence_intervals
 parser = argparse.ArgumentParser(
     description="Calculate confidence intervals from refphase output"
 )
-parser.add_argument(
-    "--tumour_id", type=str, help="Unique identifier for the tumour", required=True
-)
 parser.add_argument("--output_dir", type=str, help="Output directory", required=True)
 parser.add_argument(
     "--refphase_segments",
@@ -26,7 +23,6 @@ parser.add_argument(
     help="Location of refphase purity ploidy file",
     required=True,
 )
-
 # options
 parser.add_argument(
     "--heterozygous_SNPs_threshold",
@@ -46,7 +42,6 @@ parser.add_argument(
 
 
 args = parser.parse_args()
-tumour_id = args.tumour_id
 output_dir = args.output_dir
 ci_value = args.ci_value
 n_bootstrap = args.n_bootstrap
@@ -59,6 +54,8 @@ refphase_segments = pd.read_csv(args.refphase_segments, sep="\t")
 refphase_snps = pd.read_csv(args.refphase_snps, sep="\t")
 refphase_purity_ploidy = pd.read_csv(args.refphase_purity_ploidy, sep="\t")
 
+# get tumour_id:
+tumour_id = refphase_segments["patient_tumour"].unique()[0]
 
 # rename columns:
 refphase_segments = refphase_segments.rename(
@@ -158,8 +155,8 @@ print(f"{tumour_id} done")
 # keep only relevant columns:
 print(f"Creating ALPACA input table for {tumour_id}")
 alpaca_input = alpaca_input[["tumour_id", "sample", "segment", "cpnA", "cpnB"]]
-# write to file:
 
+# write to file:
 alpaca_input.to_csv(f"{output_dir}/ALPACA_input_table.csv", index=False)
 
 # split input into separate files for each segment to faciliate parallel processing:
