@@ -1,6 +1,8 @@
 name: alpaca
 channels:
-  - defaults
+- conda-forge
+- bioconda
+- defaults
 dependencies:
   - ca-certificates
   - gurobi::gurobi
