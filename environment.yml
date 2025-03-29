@@ -1,14 +1,15 @@
 name: alpaca
 channels:
-  - gurobi
-  - bioconda
-  - conda-forge
   - defaults
 dependencies:
-  - python=3.13.2
-  - scipy
   - ca-certificates
+  - gurobi::gurobi
   - openssl
   - pandas
+  - python=3.13.2
+  - scipy
   - tqdm
-  - gurobi::gurobi
+  - r-base
+  - bioconductor-genomicranges
+  - r-jsonlite
+  - r-optparse
