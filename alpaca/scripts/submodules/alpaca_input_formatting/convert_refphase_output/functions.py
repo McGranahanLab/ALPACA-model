@@ -57,10 +57,10 @@ def calculate_confidence_intervals_logr(seg_sample_df, ci_value=0.95, n_bootstra
 
     return pd.DataFrame(
         {
-            f"lower_CI_A": lower_CI_A,
-            f"upper_CI_A": upper_CI_A,
-            f"lower_CI_B": lower_CI_B,
-            f"upper_CI_B": upper_CI_B,
+            "lower_CI_A": lower_CI_A,
+            "upper_CI_A": upper_CI_A,
+            "lower_CI_B": lower_CI_B,
+            "upper_CI_B": upper_CI_B,
         },
         index=[0],
     )
@@ -77,12 +77,6 @@ def calculate_cn(seg_sample_df, baf, logr_shift=0, logr_scale=1):
 
 
 def calculate_confidence_intervals(seg_sample_df, ci_value=0.95, n_bootstrap=1000):
-    # balanced = (seg_sample_df["phasing"] == "none").all()
-    # imbalanced = (seg_sample_df["phasing"] != "none").all()
-    # if balanced + imbalanced == 0:
-    # TODO log this error
-    # print("Segment is neither balanced nor imbalanced")
-    # raise ValueError
     baf_a = seg_sample_df.query('phasing == "a"')["baf"].mean()
     baf_b = seg_sample_df.query('phasing == "b"')["baf"].mean()
     if math.isnan(baf_a) and math.isnan(baf_b):
@@ -112,12 +106,12 @@ def calculate_confidence_intervals(seg_sample_df, ci_value=0.95, n_bootstrap=100
 
     return pd.DataFrame(
         {
-            f"cpnA": cn_frac["A"],
-            f"lower_CI_A": cis["A"]["lower_CI"],
-            f"upper_CI_A": cis["A"]["upper_CI"],
-            f"cpnB": cn_frac["B"],
-            f"lower_CI_B": cis["B"]["lower_CI"],
-            f"upper_CI_B": cis["B"]["upper_CI"],
+            "cpnA": cn_frac["A"],
+            "lower_CI_A": cis["A"]["lower_CI"],
+            "upper_CI_A": cis["A"]["upper_CI"],
+            "cpnB": cn_frac["B"],
+            "lower_CI_B": cis["B"]["lower_CI"],
+            "upper_CI_B": cis["B"]["upper_CI"],
         },
         index=[0],
     )

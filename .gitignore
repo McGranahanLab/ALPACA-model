@@ -8,3 +8,4 @@ examples/example_cohort/output/*
 .vscode/settings.json
 examples/**/.DS_Store
 **/__pycache__/*
+tests/test_output/*
