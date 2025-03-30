@@ -92,7 +92,7 @@ compute_subclone_proportions = function(tree_list
       # order the parent subclones by tree level
       parent_df = data.frame(parent_node = parents_present)
       parent_df$level = sapply(parent_df$parent_node, function(p) return(get_tree_level(as.matrix(tree), p)))
-      data.table::setorder(parent_df, level)
+      parent_df = parent_df[order(parent_df$level), ]
 
       # For each parent node in tree: compute the difference in CCF between parent node and sum of its children
       for (p in parent_df$parent_node){
