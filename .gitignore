@@ -9,3 +9,7 @@ examples/example_cohort/output/*
 examples/**/.DS_Store
 **/__pycache__/*
 tests/test_output/*
+dev/data/*
+.DS_Store
+TODO.md
+dev/scratch.R

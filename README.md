@@ -1,32 +1,53 @@
-Repository with core ALPACA model code
-
-TODO
-
-create input with ci_tables - copy from simple pipeline
-remove auth from the repo
-
-Install package with:
-pip install dist/*.whl
-
-
-# Software requirements
-
 # ALPACA
+
+Repository containing core ALPACA code
+
+## Installation
+
+
+
+Start by cloning this repository:
+
+```
+git clone https://github.com/McGranahanLab/ALPACA-model.git
+cd ALPACA-model
+```
+
 ALPACA is implemented in python - the easiest way to install all the required dependencies is to use 'alpaca_conda.yml':
 
 ```bash
 conda env create --name alpaca --file alpaca_conda.yml
 ```
+
+Next, install ALPACA with pip:
+```
+conda run -n alpaca pip install dist/*.whl
+```
+
 ALPACA is using Gurobi solver - please obtain free academic license before running the model at https://www.gurobi.com/academia/academic-program-and-licenses
+## Test
+To ensure that ALPACA works correctly after installation, run:
 
-# Full pipeline
+```
+bash examples/run_example.sh
+```
+
+This command should create output these output files:
+
+```
+ALPACA-model/examples/example_cohort/output/LTX0000-Tumour1
+├── cn_change_to_ancestor.csv
+└── final_LTX0000-Tumour1.csv
+```
 
 
-# Required inputs
+# Tutorial
 
-ALPACA requires the following multi-sample input for each patient:
+## Required inputs
 
-## 1. Fractional copy-numbers for each sample and each genomic segment
+This section describes inputs required by ALPACA. If you are using CONIPHER and Refphase as input to ALPACA, these input will be generated automatically see section [Running ALPACA using CONIPHER and Refphase outputs](#running-alpaca-using-conipher-and-refphase-outputs) below.
+
+### 1. Fractional copy-numbers for each sample and each genomic segment
 
 These should be stored in a data frame with the following columns:
 
@@ -36,27 +57,27 @@ These should be stored in a data frame with the following columns:
 |1_6204266_6634901|U_LTXSIM001_SU_T1.R2|3.3|2.3|LTXSIM001|
 |1_6204266_6634901|U_LTXSIM001_SU_T1.R3|3.4|2.0|LTXSIM001|
 
-The table above shows the input for one genomic segment located on chromosome 1, starting at the base 6204266 and ending at 6634901 (encoded in the segment name as `<chr>_<start>_<end>`). Column 'sample' contains sample names of the tumour: this example contains 3 different samples (R1, R2 and R3) obtained from a single tumour (`U_LTXSIM001_SU_T1`). The sample names are arbitrary, but must be coherent within the entire input (including other input files). Fractional, allele-specific copy-numbers are stored in columns `cpnA` and `cpnB` and lastly column 'tumour_id' stores the identifier of the tumour.
+The table above shows the input for one genomic segment located on chromosome 1, starting at the base 6204266 and ending at 6634901 (encoded in the segment name as `<chr>_<start>_<end>`). Column 'sample' contains sample names of the tumour: this example contains 3 different samples (R1, R2 and R3) obtained from a single tumour (`U_LTXSIM001_SU_T1`). The sample names are arbitrary, but must be coherent within the entire input (including other input files). Fractional, allele-specific copy-numbers are stored in columns `cpnA` and `cpnB` and lastly column `tumour_id` stores the identifier of the tumour.
 
-The segments are stored in the `ALPACA_input_table.csv` file, but to facilitate parallel processing they are also stored separately in `segments` subdirectory, where each comma separated file contains data of only single segment. In this files segment identifiers are encoded in the file name and the file name must correspond to this pattern
-`ALPACA_input_table_<tumour_id>_<segment_id>.csv`
-for example:
+The segments are stored in the `ALPACA_input_table.csv` file
 
-```bash
-ALPACA_input_table_LTXSIM001_11_65545995_65629325.csv
-```
+IMPORTANT
 
-Pay special attention to underscore (`_`) character - it is used by ALPACA during file parsing and its usage must conform to the example pattern shown above.
+Pay special attention to underscore `_` character - it is used by ALPACA during file parsing and its usage must conform to the example pattern shown above. Do not use it in your tumour identifier.
 
 ## 2. Confidence intervals associated with each allele-specific fractional copy-number
 
-This table (called `ci_table.csv`) is similar to the ALPACA_input_table but contains lower and upper confidence intervals for each genomic segment. If you are using Refphase to generate the input, running `run_conversion.sh` script will generate such table automatically (see Running ALPACA using CONIPHER and Refphase outputs below).
+This table (called `ci_table.csv`) is similar to the ALPACA_input_table but contains lower and upper confidence intervals for each genomic segment. 
 
-#TODO add example table
+|segment|sample|lower_CI_A|upper_CI_A|lower_CI_B|upper_CI_B|tumour_id|ci_value|
+|--------|--------|--------|--------|--------|--------|--------|--------|
+|10_38599060_42906137|LTX0000_SU_T1-R1|3.218|4.196|2.200|3.085|LTX0000|0.5|
+|10_38599060_42906137|LTX0000_SU_T1-R2|1.468|1.695|2.703|2.977|LTX0000|0.5|
+
 
 ## 3. Clone proportions table
 
-Table containing cellular prevalence of each clone in each sample, saved as comma separated file under the name `cp_table.csv`. This can be derived from cancer cell fractions (CCF), for example by subtracting the CCF values of children clones from CCF values of their parents. If you are using CONIPHER to generate the input, running `run_conversion.sh` script will generate such table automatically (see Running ALPACA using CONIPHER and Refphase outputs below). Alternatively, CONIPHER contains `compute_subclone_proportions` function which can be adapted to output the clone proportions.
+Table containing cellular prevalence of each clone in each sample, saved as comma separated file under the name `cp_table.csv`. This can be derived from cancer cell fractions (CCF), for example by subtracting the CCF values of children clones from CCF values of their parents. CONIPHER contains `compute_subclone_proportions` function which can be adapted to output the clone proportions.
 This table contains an index column specifing clone names (which must match the name of clones in phylogenetic tree - see below) and one column for each sample. Proportions should sum to 1 in each sample, but small deviations from 1 are tolerated.
 |clone|U_LTXSIM001_SU_T1.R1|U_LTXSIM001_SU_T1.R2|U_LTXSIM001_SU_T1.R3|
 |--------|--------|--------|--------|
@@ -94,8 +115,6 @@ A more complex tree, with name of clones consistent with names used in the `cp_t
 [["clone12", "clone13", "clone14", "clone8"], ["clone12", "clone13", "clone14", "clone15"], ["clone12", "clone13", "clone16", "clone18", "clone1"], ["clone12", "clone19", "clone20"], ["clone12", "clone19", "clone21"]]
 ```
 
-If you are using CONIPHER to generate the input, running `run_conversion.sh` script will generate such table automatically (see Running ALPACA using CONIPHER and Refphase outputs below).
-
 ## Example input file structure
 
 Overall, for each tumour we expect the following files:
@@ -103,23 +122,22 @@ Overall, for each tumour we expect the following files:
 ```bash
 LTX000
 ├── ALPACA_input_table.csv
-├── #TODO add CIs
+├── ci_table.csv
 ├── cp_table.csv
-├── segments
-│   ├── ALPACA_input_table_LTXSIM001_11_65545995_65629325.csv
-│   ├── ALPACA_input_table_LTXSIM001_16_81211548_81816818.csv
-│   ├── ALPACA_input_table_LTXSIM001_1_6204266_6634901.csv
-│   ├── ALPACA_input_table_LTXSIM001_22_46829252_47073142.csv
-│   └── ALPACA_input_table_LTXSIM001_3_10077023_10191734.csv
 └── tree_paths.json
-
 ```
 
-# Running ALPACA from BAM files
+# Running ALPACA
 
-# Running ALPACA using CONIPHER and Refphase outputs
+## Generating ALPACA input from BAM files
 
-We recommend using CONIPHER and Refphase outputs to generate input to ALPACA.
+For a tutorial on running ALPACA from BAM files, please see the tutorial at: [ALPACA pipeline](https://github.com/McGranahanLab/ALPACA-pipeline)
+
+
+## Running ALPACA using CONIPHER and Refphase outputs
+
+We recommend using [CONIPHER](https://github.com/McGranahanLab/CONIPHER/blob/main/README.md) and [Refphase](https://bitbucket.org/schwarzlab/refphase/src/master/) outputs to generate input to ALPACA.
+
 CONIPHER output directory should contain a 'tree object' for each patient. This object is save as RDS file with the following name: <CASE_ID>.tree.RDS
 
 Refphase aggregates all outputs in one object:
@@ -135,7 +153,15 @@ results <- refphase(refphase_input)
 save(results, file = paste0(patient, "-refphase-results.RData"))
 ```
 
-Using these two files, run the 'run_conversion.sh' script located in submodules/alpaca_input_formatting.
+This is how your input directory for a single tumour should look like:
+
+```bash
+LTX000
+├── LTX0000-refphase-results.RData
+└── LTX0000.tree.RDS
+```
+
+Using these two files, run the input_conversion command which should be available in your system after installing ALPACA.
 
 E.g.:
 
@@ -145,9 +171,132 @@ refphase_rData="examples/simple_pipeline/${tumour_id}/refphase/${tumour_id}-refp
 CONIPHER_tree_object="examples/simple_pipeline/${tumour_id}/conipher/output/${tumour_id}.tree.RDS"
 output_dir="examples/simple_pipeline/${tumour_id}/alpaca/input"
 
-input_conversion --tumour_id $tumour_id --refphase_rData $refphase_rData --CONIPHER_tree_object $CONIPHER_tree_object --output_dir $output_dir
+input_conversion \
+    --tumour_id $tumour_id \
+    --refphase_rData $refphase_rData \
+    --CONIPHER_tree_object $CONIPHER_tree_object \
+    --output_dir $output_dir
+    
 ```
 
 Make sure that your 'tumour_id' is the same as 'CASE_ID' in CONIPHER output and as 'patient_tumour' in Refphase output.
 
+Converting the input might take a while and you will see this output while the program runs:
+
+```
+Tumour ID: LTX0000
+Running input_conversion - it may take a few minutes
+Argument 4 (examples/example_cohort/input/LTX0000/LTX0000-refphase-results.RData): Exists
+Argument 6 (examples/example_cohort/input/LTX0000/LTX0000.tree.RDS): Exists
+Argument 8 (examples/example_cohort/input/LTX0000): Exists
+/Users/pp/miniforge3/envs/main/lib/python3.13/site-packages/alpaca/scripts/submodules/alpaca_input_formatting/input_conversion.sh
+```
+
+
+## Running ALPACA
+
 Once input is generated, ALPACA can be run with:
+
+```
+alpaca \
+    --input_tumour_directory "${input_tumour_directory}" \
+    --output_directory "${output_directory}"
+```
+
+Your input_tumour_directory should look like this:
+
+```bash
+LTX000
+├── ALPACA_input_table.csv
+├── ci_table.csv
+├── cp_table.csv
+└── tree_paths.json
+```
+
+but if you started from CONIPHER and Refphase, intermediary input files will also be present:
+
+```bash
+├── ALPACA_input_table.csv  <- ALPACA input
+├── LTX0000-refphase-results.RData <- Refphase input
+├── LTX0000.tree.RDS  <- CONIPHER input
+├── ci_table.csv  <- ALPACA input
+├── cp_table.csv  <- ALPACA input
+├── phased_segs.tsv <- Intermediary input files
+├── phased_snps.tsv <- Intermediary input files
+├── purity_ploidy.tsv <- Intermediary input files
+└── tree_paths.json  <- ALPACA input
+```
+
+Once ALPACA starts running, you will see the logo and the progress bar:
+
+![ALPACA_run](resources/ALPACA_run.png "Image showing the output visible while running ALPACA")
+
+
+
+ALPACA operates sequentially on each genomic segement. During this process, the `ALPACA_input_table.csv` will be decomposed into separate segment files for each segment so you will see additional `segments` directory in your input directory:
+
+```
+├── ALPACA_input_table.csv
+├── LTX0000-refphase-results.RData
+├── LTX0000.tree.RDS
+├── ci_table.csv
+├── cp_table.csv
+├── phased_segs.tsv
+├── phased_snps.tsv
+├── purity_ploidy.tsv
+├── segments
+│   ├── ALPACA_input_table_LTX0000_10_38599060_42906137.csv
+│   ├── ALPACA_input_table_LTX0000_10_42906138_45934831.csv
+│   ├── ALPACA_input_table_LTX0000_10_45934832_74237001.csv
+│   ├── ALPACA_input_table_LTX0000_10_74237002_135381927.csv
+│   ├── ALPACA_input_table_LTX0000_10_95074_38406884.csv
+│   ├── ALPACA_input_table_LTX0000_11_17317215_44596409.csv
+└── tree_paths.json  <- ALPACA input
+```
+
+Solution for each segment is saved in the output directory. While the programme is running, you will see that output directory is populated with separate solution files:
+
+```
+ALPACA-model/examples/example_cohort/output/LTX0000
+├── optimal_LTX0000_10_38599060_42906137.csv
+├── optimal_LTX0000_10_42906138_45934831.csv
+├── optimal_LTX0000_10_45934832_74237001.csv
+├── optimal_LTX0000_10_74237002_135381927.csv
+├── optimal_LTX0000_10_95074_38406884.csv
+├── optimal_LTX0000_11_17317215_44596409.csv
+├── optimal_LTX0000_11_193863_2164677.csv
+├── optimal_LTX0000_11_2164678_3249658.csv
+├── optimal_LTX0000_11_3249659_17317214.csv
+└── optimal_LTX0000_11_44596410_49598207.csv
+```
+
+Once all the segments are done, these intermediary files are concatenated into single output files and deleted. The final output for a single tumour will contain two files:
+
+```
+ALPACA-model/examples/example_cohort/output/LTX0000
+├── cn_change_to_ancestor.csv
+└──final_LTX0000.csv
+```
+
+`final_LTX0000.csv` contains the clone-specific copy-numbers for both alleles:
+
+|tumour_id|segment|clone|pred_CN_A|pred_CN_B|
+|--------|--------|--------|--------|--------|
+|LTX0000|2_41509_27282430|clone17|2|1|
+|LTX0000|2_41509_27282430|clone20|2|1|
+|LTX0000|2_41509_27282430|clone14|1|2|
+|LTX0000|2_41509_27282430|clone9|1|1|
+|LTX0000|2_41509_27282430|clone15|3|1|
+
+`cn_change_to_ancestor.csv` contains the information on the copy number change between each clone and its ancestor:
+
+
+|tumour_id|segment|clone|pred_CN_A|pred_CN_B|parent|parent_pred_cpnA|parent_pred_cpnB|cn_dist_to_parent_A|cn_dist_to_parent_B|
+|--------|--------|--------|--------|--------|--------|--------|--------|--------|--------|
+|LTX0000|2_41509_27282430|clone17|2|1|clone6|2|1|0|0|
+|LTX0000|2_41509_27282430|clone20|2|1|clone4|3|1|-1|0|
+|LTX0000|2_41509_27282430|clone14|1|2|clone1|1|2|0|0|
+|LTX0000|2_41509_27282430|clone9|1|1|clone2|1|1|0|0|
+|LTX0000|2_41509_27282430|clone15|3|1|clone11|2|1|1|0|
+
+Please note that output will additionally contain 'diploid' clone which has copy numbers 1|1 in each segment (representing the normal, non-tumour ancestor cells). Remove it from the output files if you don't need this clone for your analysis.

@@ -1,5 +1,5 @@
 #!/bin/bash
-tumour_id=LTX0530
+tumour_id=LTX0000-Tumour1
 input_tumour_directory="examples/example_cohort/input/${tumour_id}"
 output_directory="examples/example_cohort/output/${tumour_id}"
 
