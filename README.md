@@ -109,7 +109,7 @@ This table (called `ci_table.csv`) is similar to the ALPACA_input_table but cont
 #### 3. Clone proportions table
 
 Table containing cellular prevalence of each clone in each sample, saved as comma separated file under the name `cp_table.csv`. This can be derived from cancer cell fractions (CCF), for example by subtracting the CCF values of children clones from CCF values of their parents. CONIPHER contains `compute_subclone_proportions` function which can be adapted to output the clone proportions.
-This table contains an index column specifing clone names (which must match the name of clones in phylogenetic tree - see below) and one column for each sample. Proportions should sum to 1 in each sample, but small deviations from 1 are tolerated.
+This table contains an index column specifying clone names (which must match the name of clones in phylogenetic tree - see below) and one column for each sample. Proportions should sum to 1 in each sample, but small deviations from 1 are tolerated.
 
 |clone|U_LTXSIM001_SU_T1.R1|U_LTXSIM001_SU_T1.R2|U_LTXSIM001_SU_T1.R3|
 |--------|--------|--------|--------|
@@ -269,7 +269,7 @@ Once ALPACA starts running, you will see the logo and the progress bar:
 
 ![ALPACA_run](resources/ALPACA_run.png "Image showing the output visible while running ALPACA")
 
-ALPACA operates sequentially on each genomic segement. During this process, the `ALPACA_input_table.csv` will be decomposed into separate segment files for each segment so you will see additional `segments` directory in your input directory:
+ALPACA operates sequentially on each genomic segment. During this process, the `ALPACA_input_table.csv` will be decomposed into separate segment files for each segment so you will see additional `segments` directory in your input directory:
 
 ```bash
 ├── ALPACA_input_table.csv
