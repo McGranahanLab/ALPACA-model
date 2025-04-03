@@ -3,8 +3,6 @@ __pycache__/*
 /data/output/example_cohort/cohort_outputs/all_solutions_combined.csv
 /.idea/*
 alpaca/__pycache__/*
-examples/example_cohort/input/*
-examples/example_cohort/output/*
 .vscode/settings.json
 examples/**/.DS_Store
 **/__pycache__/*
