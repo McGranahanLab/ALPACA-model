@@ -40,7 +40,7 @@ cd ALPACA-model
 ALPACA is implemented in python - the easiest way to install all the required dependencies is to use 'alpaca_conda.yml':
 
 ```bash
-conda env create --name alpaca --file alpaca_conda.yml
+conda env create --name alpaca --file environment.yml
 ```
 
 Next, install ALPACA with pip:
