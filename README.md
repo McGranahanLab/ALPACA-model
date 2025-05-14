@@ -54,7 +54,13 @@ ALPACA is using Gurobi solver - please obtain free academic license before runni
 <!-- TOC --><a name="testing-installation"></a>
 ### Testing installation
 
-To ensure that ALPACA works correctly after installation, run:
+To ensure that ALPACA works correctly after installation, activate the environment:
+
+```bash
+conda activate alpaca
+```
+
+then run:
 
 ```bash
 bash examples/run_example.sh
@@ -74,7 +80,7 @@ ALPACA-model/examples/example_cohort/output/LTX0000-Tumour1
 <!-- TOC --><a name="required-inputs"></a>
 ### Required inputs
 
-This section describes inputs required by ALPACA. If you are using CONIPHER and Refphase as input to ALPACA, these input will be generated automatically see section [Running ALPACA using CONIPHER and Refphase outputs](#running-alpaca-using-conipher-and-refphase-outputs) below.
+This section describes inputs required by ALPACA. If you are using CONIPHER and Refphase as input to ALPACA, these input will be generated automatically see section [Running ALPACA using CONIPHER and Refphase outputs](#running-alpaca-using-conipher-and-refphase-outputs) below. Input for each tumour should be stored in a separate directory, i.e. each of the input tables should only contain data obtained from a single tumour.
 
 <!-- TOC --><a name="1-fractional-copy-numbers-for-each-sample-and-each-genomic-segment"></a>
 #### 1. Fractional copy-numbers for each sample and each genomic segment
@@ -83,11 +89,11 @@ These should be stored in a data frame with the following columns:
 
 |segment|sample|cpnA|cpnB|tumour_id|
 |--------|--------|--------|--------|--------|
-|1_6204266_6634901|U_LTXSIM001_SU_T1.R1|3.2|2.0|LTXSIM001|
-|1_6204266_6634901|U_LTXSIM001_SU_T1.R2|3.3|2.3|LTXSIM001|
-|1_6204266_6634901|U_LTXSIM001_SU_T1.R3|3.4|2.0|LTXSIM001|
+|1_6204266_6634901|U_LTX0000_SU_T1.R1|3.2|2.0|LTX0000|
+|1_6204266_6634901|U_LTX0000_SU_T1.R2|3.3|2.3|LTX0000|
+|1_6204266_6634901|U_LTX0000_SU_T1.R3|3.4|2.0|LTX0000|
 
-The table above shows the input for one genomic segment located on chromosome 1, starting at the base 6204266 and ending at 6634901 (encoded in the segment name as `<chr>_<start>_<end>`). Column 'sample' contains sample names of the tumour: this example contains 3 different samples (R1, R2 and R3) obtained from a single tumour (`U_LTXSIM001_SU_T1`). The sample names are arbitrary, but must be coherent within the entire input (including other input files). Fractional, allele-specific copy-numbers are stored in columns `cpnA` and `cpnB` and lastly column `tumour_id` stores the identifier of the tumour.
+The table above shows the input for one genomic segment located on chromosome 1, starting at the base 6204266 and ending at 6634901 (encoded in the segment name as `<chr>_<start>_<end>`). Column 'sample' contains sample names of the tumour: this example contains 3 different samples (R1, R2 and R3) obtained from a single tumour (`U_LTX0000_SU_T1`). The sample names are arbitrary, but must be coherent within the entire input (including other input files). Fractional, allele-specific copy-numbers are stored in columns `cpnA` and `cpnB` and lastly column `tumour_id` stores the identifier of the tumour.
 
 The segments are stored in the `ALPACA_input_table.csv` file
 
@@ -111,7 +117,7 @@ This table (called `ci_table.csv`) is similar to the ALPACA_input_table but cont
 Table containing cellular prevalence of each clone in each sample, saved as comma separated file under the name `cp_table.csv`. This can be derived from cancer cell fractions (CCF), for example by subtracting the CCF values of children clones from CCF values of their parents. CONIPHER contains `compute_subclone_proportions` function which can be adapted to output the clone proportions.
 This table contains an index column specifying clone names (which must match the name of clones in phylogenetic tree - see below) and one column for each sample. Proportions should sum to 1 in each sample, but small deviations from 1 are tolerated.
 
-|clone|U_LTXSIM001_SU_T1.R1|U_LTXSIM001_SU_T1.R2|U_LTXSIM001_SU_T1.R3|
+|clone|U_LTX0000_SU_T1.R1|U_LTX0000_SU_T1.R2|U_LTX0000_SU_T1.R3|
 |--------|--------|--------|--------|
 |clone1|0.0309|0.0006|0.1383|
 |clone12|0.2810|0.0|0.0|
@@ -156,7 +162,7 @@ A more complex tree, with name of clones consistent with names used in the `cp_t
 Overall, for each tumour we expect the following files:
 
 ```bash
-LTX000
+LTX0000
 ├── ALPACA_input_table.csv
 ├── ci_table.csv
 ├── cp_table.csv
