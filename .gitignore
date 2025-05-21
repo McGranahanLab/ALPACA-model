@@ -11,3 +11,6 @@ dev/data/*
 .DS_Store
 TODO.md
 dev/scratch.R
+examples/**/*.csv
+examples/**/*.tsv
+examples/**/*.json
