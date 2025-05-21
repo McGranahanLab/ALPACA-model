@@ -27,3 +27,8 @@ get_cn_change_to_ancestor \
     --output_directory "${output_directory}" \
     --tumour_df_path "${output_directory}/final_${tumour_id}.csv" \
     --tree_path "${input_tumour_directory}/tree_paths.json"
+
+# calculate clone copy number diversity:
+calculate_ccd \
+    --output_directory "${output_directory}" \
+    --alpaca_output_path "${output_directory}/final_${tumour_id}.csv"

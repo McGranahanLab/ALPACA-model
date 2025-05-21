@@ -14,3 +14,4 @@ dev/scratch.R
 examples/**/*.csv
 examples/**/*.tsv
 examples/**/*.json
+*.log

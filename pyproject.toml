@@ -45,3 +45,4 @@ allow-direct-references = true
 alpaca = "alpaca.__main__:main"
 input_conversion = "alpaca.scripts:input_conversion"
 get_cn_change_to_ancestor = "alpaca.scripts:run_get_cn_change_to_ancestor"
+calculate_ccd = "alpaca.scripts:run_calculate_ccd"
