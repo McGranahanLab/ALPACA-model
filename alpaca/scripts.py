@@ -71,7 +71,7 @@ def run_get_cn_change_to_ancestor():
         required=True,
     )
     parser.add_argument(
-        "--output_path", help="Path to save the output CSV file", required=True
+        "--output_directory", help="Directory to save the output CSV file", required=True
     )
 
     args = parser.parse_args()
@@ -91,20 +91,13 @@ def run_get_cn_change_to_ancestor():
         )
 
         # Ensure output directory exists
-        output_dir = os.path.dirname(args.output_path)
+        output_dir = args.output_directory
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        output_name = f"{args.output_path}/cn_change_to_ancestor.csv"
+        output_name = f"{args.output_directory}/cn_change_to_ancestor.csv"
         cn_change_to_ancestor_df.to_csv(output_name, index=False)
         logging.info(f"Analysis completed successfully. Output saved to: {output_name}")
 
     except Exception as e:
         logging.exception(f"An error occurred during analysis: {e}")
         exit(1)
-
-
-if __name__ == "__main__":
-    if sys.argv[1] == "input_conversion":
-        input_conversion()
-    elif sys.argv[1] == "get_cn_change_to_ancestor":
-        run_get_cn_change_to_ancestor()

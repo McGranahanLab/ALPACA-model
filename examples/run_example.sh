@@ -24,6 +24,6 @@ alpaca \
 
 # get cn change to ancestor:
 get_cn_change_to_ancestor \
-    --output_path "${output_directory}" \
+    --output_directory "${output_directory}" \
     --tumour_df_path "${output_directory}/final_${tumour_id}.csv" \
     --tree_path "${input_tumour_directory}/tree_paths.json"
