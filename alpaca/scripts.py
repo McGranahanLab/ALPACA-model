@@ -9,6 +9,7 @@ from datetime import datetime
 import logging
 
 # Configure logging
+'''
 log_time = datetime.now().strftime("%Y%m%d_%H%M%S")
 log_filename = f"run_log_{log_time}.log"
 logging.basicConfig(
@@ -20,7 +21,7 @@ logging.basicConfig(
         logging.FileHandler(log_filename)
     ]
 )
-
+'''
 
 def input_conversion():
     """

@@ -555,6 +555,7 @@ class SegmentSolution:
         output_path = os.path.join(output_dir, output_name)
         os.makedirs(output_dir, exist_ok=True)
         assert self.optimal_solution is not None
+        self.optimal_solution = self.optimal_solution[self.optimal_solution.clone != "diploid"]
         if self.output_all_solutions:
             all_solutions = self.get_all_simplified_solution()
             all_solutions_output_path = output_path.replace("optimal", "all")
