@@ -1,6 +1,8 @@
 import pandas as pd
 from .utils import find_parent, read_tree_json
 from scipy.spatial import distance
+import logging
+
 
 ### get_cn_change_to_ancestor ###
 def get_parent_copynumbers(
@@ -53,6 +55,7 @@ def calculate_ccd(results_path,metric='euclidean'):
     1  clone10          1          3  1_10_100
     2  clone12          1          2  1_10_100
     '''
+    logger = logging.getLogger("ccd")
     results_df = pd.read_csv(results_path)
     # validate input:
     # check if columns tumour_id, clone and segment are strings, while pred_CN_A and pred_CN_B are integers:
@@ -70,7 +73,7 @@ def calculate_ccd(results_path,metric='euclidean'):
         raise ValueError("segment column should contain the format 'chromosome_start_end'")
     results_per_tumour = []
     tumour_ids = results_df['tumour_id'].unique()
-    print(f"Found {len(tumour_ids)} unique tumours")
+    logger.info(f"Found {len(tumour_ids)} unique tumours")
     for tumour_id, tumour_df in results_df.groupby('tumour_id'):
         tumour_df['chromosome'] = tumour_df['segment'].str.split('_',expand=True)[0].astype(int)
         tumour_df['start'] = tumour_df['segment'].str.split('_',expand=True)[1].astype(int)

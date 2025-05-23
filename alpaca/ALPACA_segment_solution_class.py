@@ -10,7 +10,7 @@ from typing import Optional, Dict, Any
 import time
 from alpaca.ALPACA_model_class import Model
 from alpaca.utils import read_tree_json
-
+import logging
 
 def ensure_elbow_strictly_decreasing(df):
     for col in ["D_score"]:
@@ -296,7 +296,8 @@ def rescale_elbow_points(complexities, elbow):
 
 
 class SegmentSolution:
-    def __init__(self, input_file_name: str, config: Optional[Dict[str, Any]] = None):
+    def __init__(self, input_file_name: str, config: Optional[Dict[str, Any]] = None, logger: Optional[logging.Logger] = None):
+        self.logger = logger
         # get start time:
         self.start_time = time.time()
         if config is None:
@@ -549,6 +550,7 @@ class SegmentSolution:
             self.segments_dir = f"{self.tumour_dir}/segments"
 
     def save_output(self):
+        logger = self.logger
         end_time = time.time()
         output_name = "optimal_" + self.input_file_name.split("ALPACA_input_table_")[1]
         output_dir = self.config["preprocessing_config"]["output_directory"]
@@ -570,3 +572,7 @@ class SegmentSolution:
             total_run_time = round(end_time - self.start_time)
             self.optimal_solution["run_time_seconds"] = total_run_time
         self.optimal_solution.to_csv(output_path, index=False)
+        if os.path.exists(output_path):
+            logger.info(f"Segment output created")
+        else:
+            logger.error(f"Output not saved to {output_path}")

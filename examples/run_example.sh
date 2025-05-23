@@ -11,24 +11,24 @@ refphase_rData="${input_tumour_directory}/${tumour_id}-refphase-results.RData"
 CONIPHER_tree_object="${input_tumour_directory}/${tumour_id}.tree.RDS"
 output_dir="${input_tumour_directory}"
 
-input_conversion \
+alpaca input-conversion \
  --tumour_id $tumour_id \
  --refphase_rData $refphase_rData \
  --CONIPHER_tree_object $CONIPHER_tree_object \
  --output_dir $output_dir
 
 # run alpaca:
-alpaca \
+alpaca run \
     --input_tumour_directory "${input_tumour_directory}" \
     --output_directory "${output_directory}"
 
 # get cn change to ancestor:
-get_cn_change_to_ancestor \
+alpaca ancestor-delta \
     --output_directory "${output_directory}" \
-    --tumour_df_path "${output_directory}/final_${tumour_id}.csv" \
+    --tumour_df_path "${output_directory}/ALPACA_output_${tumour_id}.csv" \
     --tree_path "${input_tumour_directory}/tree_paths.json"
 
 # calculate clone copy number diversity:
-calculate_ccd \
+alpaca ccd \
     --output_directory "${output_directory}" \
-    --alpaca_output_path "${output_directory}/final_${tumour_id}.csv"
+    --alpaca_output_path "${output_directory}/ALPACA_output_${tumour_id}.csv"

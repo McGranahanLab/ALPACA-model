@@ -7,21 +7,7 @@ from alpaca.analysis import calculate_ccd
 import argparse
 from datetime import datetime
 import logging
-
-# Configure logging
-'''
-log_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-log_filename = f"run_log_{log_time}.log"
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(log_filename)
-    ]
-)
-'''
+from alpaca.utils import create_logger
 
 def input_conversion():
     """
@@ -46,10 +32,11 @@ def input_conversion():
         # Set environment variable to help script locate its dependencies
         env = os.environ.copy()
         env["SUBMODULES_PATH"] = submodules_path
-
+        cmd_args = sys.argv[1:]
+        print(f"Command line arguments: {cmd_args}")
         # Execute the shell script with all passed arguments
         result = subprocess.run(
-            [script_path] + sys.argv[1:],
+            [script_path] + sys.argv[2:],
             check=True,
             text=True,
             capture_output=True,
@@ -58,6 +45,10 @@ def input_conversion():
         print(f"Return code: {result.returncode}")
         print(f"Output: {result.stdout}")
         print(f"Stderr: {result.stderr}")
+        print("")
+        print("")
+        print("---------------------------------------")
+        print("Input conversion completed successfully.")
         return 0
     except subprocess.CalledProcessError as e:
         print(f"Error executing input_conversion: {e.stderr}", file=sys.stderr)
@@ -69,9 +60,11 @@ def input_conversion():
 
 def run_get_cn_change_to_ancestor():
     """CLI wrapper for get_cn_change_to_ancestor"""
+    logger = create_logger(name='ancestor-delta', log_dir='logs')
     parser = argparse.ArgumentParser(
         description="Compute copy number changes to ancestor and save to CSV."
     )
+    parser.add_argument('command', choices=['ancestor-delta'], help='Command to run')
     parser.add_argument("--tree_path", help="Path to the tree file", required=True)
     parser.add_argument(
         "--tumour_df_path",
@@ -85,15 +78,15 @@ def run_get_cn_change_to_ancestor():
     args = parser.parse_args()
     # Validate input files exist
     if not os.path.isfile(args.tree_path):
-        logging.error(f"Tree file not found: {args.tree_path}")
+        logger.error(f"Tree file not found: {args.tree_path}")
         exit(1)
 
     if not os.path.isfile(args.tumour_df_path):
-        logging.error(f"Tumour dataframe file not found: {args.tumour_df_path}")
+        logger.error(f"Tumour dataframe file not found: {args.tumour_df_path}")
         exit(1)
 
     try:
-        logging.info("Starting analysis...")
+        logger.info("Starting analysis...")
         cn_change_to_ancestor_df = get_cn_change_to_ancestor(
             args.tree_path, args.tumour_df_path
         )
@@ -104,18 +97,20 @@ def run_get_cn_change_to_ancestor():
             os.makedirs(output_dir)
         output_name = f"{args.output_directory}/cn_change_to_ancestor.csv"
         cn_change_to_ancestor_df.to_csv(output_name, index=False)
-        logging.info(f"Analysis completed successfully. Output saved to: {output_name}")
+        logger.info(f"Analysis completed successfully. Output saved to: {output_name}")
 
     except Exception as e:
-        logging.exception(f"An error occurred during analysis: {e}")
+        logger.exception(f"An error occurred during analysis: {e}")
         exit(1)
 
 
 def run_calculate_ccd():
     """CLI wrapper for calculate_ccd"""
+    logger = create_logger(name='ccd_analysis', log_dir='logs')
     parser = argparse.ArgumentParser(
         description="Compute clone copy number diversity and save results."
     )
+    parser.add_argument('command', choices=['ccd'], help='Command to run')
     parser.add_argument(
         "--alpaca_output_path",
         help="Path to the results dataframe file (CSV format), either the entire cohort or a single tumour",
@@ -128,7 +123,7 @@ def run_calculate_ccd():
     args = parser.parse_args()
     # Validate input files exist
     if not os.path.isfile(args.alpaca_output_path):
-        logging.error(f"Tumour dataframe file not found: {args.tumour_df_path}")
+        logger.error(f"Tumour dataframe file not found: {args.tumour_df_path}")
         exit(1)
     # check if first row of the file contains columns 'tumour_id' and 'pred_CN_A' and 'pred_CN_B':
     with open(args.alpaca_output_path, 'r') as f:
@@ -136,10 +131,10 @@ def run_calculate_ccd():
         required_columns = ['tumour_id', 'clone', 'segment', 'pred_CN_A', 'pred_CN_B']
         missing_columns = [col for col in required_columns if col not in header]
         if missing_columns:
-            logging.error(f"Tumour dataframe file does not contain required columns: {missing_columns}")
+            logger.error(f"Tumour dataframe file does not contain required columns: {missing_columns}")
             exit(1)
     try:
-        logging.info("Starting CCD analysis...")
+        logger.info("Starting CCD analysis...")
         ccd_scores_df = calculate_ccd(args.alpaca_output_path)
 
         # Ensure output directory exists
@@ -147,8 +142,8 @@ def run_calculate_ccd():
         os.makedirs(output_dir, exist_ok=True)
         output_name = f"{output_dir}/clone_copy_number_diversity_scores.csv"
         ccd_scores_df.to_csv(output_name, index=False)
-        logging.info(f"Analysis completed successfully. Output saved to: {output_name}")
+        logger.info(f"Analysis completed successfully. Output saved to: {output_name}")
 
     except Exception as e:
-        logging.exception(f"An error occurred during analysis: {e}")
+        logger.exception(f"An error occurred during analysis: {e}")
         exit(1)

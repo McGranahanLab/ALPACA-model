@@ -2,6 +2,84 @@ import os
 import pandas as pd
 from pathlib import Path
 import json
+import importlib
+import logging
+from datetime import datetime
+from typing import Optional
+import logging
+
+
+def show_version():
+    try:
+        version = importlib.metadata.version("alpaca")
+        print(f"alpaca {version}")
+    except importlib.metadata.PackageNotFoundError:
+        print("alpaca version unknown (not installed)")
+
+
+def show_help():
+    print("ALPACA = ALlele-specific Phylogenetic Analysis of clone Copy-number Alterations")
+    print_logo()
+    print("")
+    print("Usage:")
+    print("  alpaca [command]")
+    print("")
+    print("Commands:")
+    print("  version              Show version")
+    print("  help                 Show this help")
+    print("  run                  Run ALPACA")
+    print("  input-conversion     Run input conversion")
+    print("  ccd                  Calculate clone copy number diversity")
+    print("")
+
+
+def create_logger(name: str, log_dir: Optional[str] = None) -> logging.Logger:
+    """
+    Create a named logger with both console and file handlers.
+    
+    Args:
+        name: Name for the logger
+        log_dir: Optional directory for log files (defaults to current directory)
+    
+    Returns:
+        Configured logger instance
+    """
+    # create logger
+    logger = logging.getLogger(name)
+    # check for active handlers
+    if logger.handlers:
+        return logger
+    
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter(
+        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    # File handler
+    log_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = f"{name}_log_{log_time}.log"
+    
+    if log_dir:
+        os.makedirs(log_dir, exist_ok=True)
+        log_path = os.path.join(log_dir, log_filename)
+    else:
+        log_path = log_filename
+    
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    logger.info(f"Logger '{name}' initialized. Log file: {log_path}")
+    
+    return logger
 
 
 def split_to_segments(tumour_dir: str) -> list[str]:
@@ -24,14 +102,18 @@ def split_to_segments(tumour_dir: str) -> list[str]:
 
 
 def concatenate_output(output_dir: str):
+    logger = logging.getLogger("ALPACA")
     output_files = [f for f in os.listdir(output_dir) if f.endswith(".csv")]
     dfs = [pd.read_csv(f"{output_dir}/{f}") for f in output_files]
     concatenated_df = pd.concat(dfs)
     tumour_id = concatenated_df["tumour_id"].iloc[0]
-    concatenated_df.to_csv(f"{output_dir}/final_{tumour_id}.csv", index=False)
-    # remove segment files
-    for f in output_files:
-        os.remove(f"{output_dir}/{f}")
+    output_name = f"{output_dir}/ALPACA_output_{tumour_id}.csv"
+    concatenated_df.to_csv(output_name, index=False)
+    if os.path.exists(output_name):
+        logger.info(f"Combined output saved to {output_name}")
+        # remove segment files
+        for f in output_files:
+            os.remove(f"{output_dir}/{f}")
 
 
 def set_run_mode(config: dict) -> tuple[dict, str]:
