@@ -3,17 +3,25 @@ import subprocess
 import sys
 from importlib.resources import files
 from alpaca.analysis import get_cn_change_to_ancestor
+from alpaca.analysis import calculate_ccd
 import argparse
-
+from datetime import datetime
 import logging
 
 # Configure logging
+'''
+log_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+log_filename = f"run_log_{log_time}.log"
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(log_filename)
+    ]
 )
-
+'''
 
 def input_conversion():
     """
@@ -96,6 +104,49 @@ def run_get_cn_change_to_ancestor():
             os.makedirs(output_dir)
         output_name = f"{args.output_directory}/cn_change_to_ancestor.csv"
         cn_change_to_ancestor_df.to_csv(output_name, index=False)
+        logging.info(f"Analysis completed successfully. Output saved to: {output_name}")
+
+    except Exception as e:
+        logging.exception(f"An error occurred during analysis: {e}")
+        exit(1)
+
+
+def run_calculate_ccd():
+    """CLI wrapper for calculate_ccd"""
+    parser = argparse.ArgumentParser(
+        description="Compute clone copy number diversity and save results."
+    )
+    parser.add_argument(
+        "--alpaca_output_path",
+        help="Path to the results dataframe file (CSV format), either the entire cohort or a single tumour",
+        required=True,
+    )
+    parser.add_argument(
+        "--output_directory", help="Path to save the output CSV file", required=True
+    )
+
+    args = parser.parse_args()
+    # Validate input files exist
+    if not os.path.isfile(args.alpaca_output_path):
+        logging.error(f"Tumour dataframe file not found: {args.tumour_df_path}")
+        exit(1)
+    # check if first row of the file contains columns 'tumour_id' and 'pred_CN_A' and 'pred_CN_B':
+    with open(args.alpaca_output_path, 'r') as f:
+        header = f.readline().strip().split(',')
+        required_columns = ['tumour_id', 'clone', 'segment', 'pred_CN_A', 'pred_CN_B']
+        missing_columns = [col for col in required_columns if col not in header]
+        if missing_columns:
+            logging.error(f"Tumour dataframe file does not contain required columns: {missing_columns}")
+            exit(1)
+    try:
+        logging.info("Starting CCD analysis...")
+        ccd_scores_df = calculate_ccd(args.alpaca_output_path)
+
+        # Ensure output directory exists
+        output_dir = args.output_directory
+        os.makedirs(output_dir, exist_ok=True)
+        output_name = f"{output_dir}/clone_copy_number_diversity_scores.csv"
+        ccd_scores_df.to_csv(output_name, index=False)
         logging.info(f"Analysis completed successfully. Output saved to: {output_name}")
 
     except Exception as e:

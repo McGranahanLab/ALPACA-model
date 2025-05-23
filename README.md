@@ -339,5 +339,3 @@ ALPACA-model/examples/example_cohort/output/LTX0000
 |LTX0000|2_41509_27282430|clone14|1|2|clone1|1|2|0|0|
 |LTX0000|2_41509_27282430|clone9|1|1|clone2|1|1|0|0|
 |LTX0000|2_41509_27282430|clone15|3|1|clone11|2|1|1|0|
-
-Please note that output will additionally contain 'diploid' clone which has copy numbers 1|1 in each segment (representing the normal, non-tumour ancestor cells). Remove it from the output files if you don't need this clone for your analysis.
