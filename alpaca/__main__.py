@@ -4,37 +4,53 @@ import sys
 from tqdm import tqdm
 from io import StringIO
 from alpaca.ALPACA_segment_solution_class import SegmentSolution
-from alpaca.utils import print_logo, concatenate_output, set_run_mode
+from alpaca.utils import show_version, show_help, print_logo, concatenate_output, set_run_mode, create_logger
 from alpaca.make_configuration import make_config
 from datetime import datetime
-import logging
+import alpaca.scripts as scripts
+
 
 def main():
-    
+
+    if len(sys.argv) > 1:
+        command = sys.argv[1].lower()
+    if command in ['version', '--version', '-v']:
+        show_version()
+        return
+    elif command in ['help', '--help', '-h']:
+        show_help()
+        return
+    elif command == 'input-conversion':
+        scripts.input_conversion()
+        return
+    elif command == 'ancestor-delta':
+        scripts.run_get_cn_change_to_ancestor()
+        return
+    elif command == 'ccd':
+        scripts.run_calculate_ccd()
+        return
+    elif command == 'run':
+        run_alpaca()
+    else:
+        print(f"Unknown command: {command}")
+        print("Run 'alpaca help' for available commands.")
+        sys.exit(1)
+
+
+def run_alpaca():
     # Configure logging
-    log_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    log_filename = f"run_log_{log_time}.log"
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-        handlers=[
-            logging.StreamHandler(),
-            logging.FileHandler(log_filename)
-        ])
-    
-    
-    logging.info("Starting ALPACA")
+    logger  = create_logger(name = "ALPACA", log_dir = "logs")
+    logger.info("Starting ALPACA")
     config = make_config(sys.argv[1:])
     debug = config["preprocessing_config"]["debug"]
     # determine running mode:
     # if 'tumour', expect single file with all the segments and output a single file
     # if 'segment' expect array of files to segment files (can be from different tumours) and create separate outputs for each segment
     config, run_mode = set_run_mode(config)
-    logging.info("-------------------------------------------------")
-    logging.info("Running ALPACA with the following parameters:")
+    logger.info("-------------------------------------------------")
+    logger.info("Running ALPACA with the following parameters:")
     # print value of each parameter:
-    logging.info(config)
+    logger.info(config)
     print_logo()
     # initiate progress bar:
     if not debug:
@@ -51,7 +67,7 @@ def main():
             sys.stdout = StringIO()
     try:
         for input_file_name in config["preprocessing_config"]["input_files"]:
-            SS = SegmentSolution(input_file_name, config)
+            SS = SegmentSolution(input_file_name, config, logger)
             SS.run_iterations()
             SS.find_optimal_solution()
             SS.get_solution()
@@ -60,16 +76,15 @@ def main():
                 progress_bar.update(1)
                 progress_bar.set_description(f"Processing {input_file_name}")
             else:
-                print(f"Segment {input_file_name} solved.")
+                logger.info(f"Segment {input_file_name} solved.")
         if run_mode == "tumour":
             concatenate_output(config["preprocessing_config"]["output_directory"])
-        logging.info("Done")
+        logger.info("Done")
     except Exception as e:
-        logging.error(f"An error occurred: {e}")
+        logger.error(f"An error occurred: {e}")
         raise e
     finally:
         if not debug:
-            print('-')
             sys.stdout.close()
             sys.stdout = original_stdout
             progress_bar.close()
