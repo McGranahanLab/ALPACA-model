@@ -7,7 +7,7 @@ from alpaca.analysis import calculate_ccd
 import argparse
 from datetime import datetime
 import logging
-from alpaca.utils import create_logger
+from alpaca.utils import create_logger, save_dataframe_to_csv
 
 def input_conversion():
     """
@@ -25,10 +25,6 @@ def input_conversion():
         print(script_path)
         # Locate the submodules directory
         submodules_path = str(files("alpaca").joinpath("scripts/submodules"))
-
-        # Ensure the script is executable
-        # os.chmod(script_path, 0o755)
-
         # Set environment variable to help script locate its dependencies
         env = os.environ.copy()
         env["SUBMODULES_PATH"] = submodules_path
@@ -90,14 +86,8 @@ def run_get_cn_change_to_ancestor():
         cn_change_to_ancestor_df = get_cn_change_to_ancestor(
             args.tree_path, args.tumour_df_path
         )
-
-        # Ensure output directory exists
-        output_dir = args.output_directory
-        if output_dir and not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        output_name = f"{args.output_directory}/cn_change_to_ancestor.csv"
-        cn_change_to_ancestor_df.to_csv(output_name, index=False)
-        logger.info(f"Analysis completed successfully. Output saved to: {output_name}")
+        save_dataframe_to_csv(df = cn_change_to_ancestor_df, output_dir = args.output_directory, output_filename = "cn_change_to_ancestor.csv")
+        logger.info(f"Analysis completed successfully. Output saved to: {args.output_directory}")
 
     except Exception as e:
         logger.exception(f"An error occurred during analysis: {e}")
@@ -123,7 +113,7 @@ def run_calculate_ccd():
     args = parser.parse_args()
     # Validate input files exist
     if not os.path.isfile(args.alpaca_output_path):
-        logger.error(f"Tumour dataframe file not found: {args.tumour_df_path}")
+        logger.error(f"Tumour dataframe file not found: {args.alpaca_output_path}")
         exit(1)
     # check if first row of the file contains columns 'tumour_id' and 'pred_CN_A' and 'pred_CN_B':
     with open(args.alpaca_output_path, 'r') as f:
