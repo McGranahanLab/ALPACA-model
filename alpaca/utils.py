@@ -101,9 +101,10 @@ def split_to_segments(tumour_dir: str) -> list[str]:
     return segments
 
 
-def concatenate_output(output_dir: str):
+def concatenate_output(output_dir: str) -> str:
     logger = logging.getLogger("ALPACA")
-    output_files = [f for f in os.listdir(output_dir) if f.endswith(".csv")]
+    # keep only segment files in output files list
+    output_files = [f for f in os.listdir(output_dir) if f.endswith(".csv") and (("optimal" in f) or ('all' in f))]
     dfs = [pd.read_csv(f"{output_dir}/{f}") for f in output_files]
     concatenated_df = pd.concat(dfs)
     tumour_id = concatenated_df["tumour_id"].iloc[0]
@@ -113,7 +114,12 @@ def concatenate_output(output_dir: str):
         logger.info(f"Combined output saved to {output_name}")
         # remove segment files
         for f in output_files:
-            os.remove(f"{output_dir}/{f}")
+            if f != os.path.basename(output_name):
+                os.remove(f"{output_dir}/{f}")
+    else:
+        logger.error(f"Failed to save combined output to {output_name}")
+        raise FileNotFoundError(f"Output file not found: {output_name}")
+    return output_name
 
 
 def set_run_mode(config: dict) -> tuple[dict, str]:
@@ -202,3 +208,16 @@ def print_logo():
      │ │      │ │
     """
     )
+
+def save_dataframe_to_csv(df: pd.DataFrame, output_dir: str, output_filename: str):
+    """
+    Save a DataFrame to a CSV file.
+    
+    Args:
+        df: DataFrame to save
+        output_dir: Path to directory where the CSV file will be saved
+        output_filename: Name of the output CSV file
+    """
+    output_path = os.path.join(output_dir, output_filename)
+    os.makedirs(os.path.dirname(output_dir), exist_ok=True)
+    df.to_csv(output_path, index=False)
