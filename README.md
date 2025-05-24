@@ -242,7 +242,7 @@ Argument 8 (examples/example_cohort/input/LTX0000): Exists
 Once input is generated, ALPACA can be run with:
 
 ```bash
-alpaca \
+alpaca run \
     --input_tumour_directory "${input_tumour_directory}" \
     --output_directory "${output_directory}"
 ```

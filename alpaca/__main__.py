@@ -3,10 +3,11 @@ import os
 import sys
 from tqdm import tqdm
 from io import StringIO
-from alpaca.ALPACA_segment_solution_class import SegmentSolution
-from alpaca.utils import show_version, show_help, print_logo, concatenate_output, set_run_mode, create_logger
-from alpaca.make_configuration import make_config
 from datetime import datetime
+from alpaca.ALPACA_segment_solution_class import SegmentSolution
+from alpaca.utils import show_version, show_help, print_logo, concatenate_output, set_run_mode, create_logger, save_dataframe_to_csv
+from alpaca.make_configuration import make_config
+from alpaca.analysis import get_cn_change_to_ancestor
 import alpaca.scripts as scripts
 
 
@@ -78,7 +79,13 @@ def run_alpaca():
             else:
                 logger.info(f"Segment {input_file_name} solved.")
         if run_mode == "tumour":
-            concatenate_output(config["preprocessing_config"]["output_directory"])
+            concatenated_output_path = concatenate_output(config["preprocessing_config"]["output_directory"])
+            logger.info("Calculating copy number change to ancestor...")
+            cn_change_to_ancestor_df = get_cn_change_to_ancestor(
+            f"{SS.tumour_dir}/tree_paths.json", concatenated_output_path
+            )
+            save_dataframe_to_csv(df = cn_change_to_ancestor_df, output_dir = SS.config["preprocessing_config"]["output_directory"], output_filename = "cn_change_to_ancestor.csv")
+            logger.info(f"Analysis completed successfully. Output saved to: {SS.config["preprocessing_config"]["output_directory"]}")
         logger.info("Done")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
