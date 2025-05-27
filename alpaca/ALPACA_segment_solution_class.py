@@ -12,6 +12,7 @@ from alpaca.ALPACA_model_class import Model
 from alpaca.utils import read_tree_json
 import logging
 
+
 def ensure_elbow_strictly_decreasing(df):
     for col in ["D_score"]:
         df[col] = df[col].round(3)
@@ -296,7 +297,12 @@ def rescale_elbow_points(complexities, elbow):
 
 
 class SegmentSolution:
-    def __init__(self, input_file_name: str, config: Optional[Dict[str, Any]] = None, logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        input_file_name: str,
+        config: Optional[Dict[str, Any]] = None,
+        logger: Optional[logging.Logger] = None,
+    ):
         self.logger = logger
         # get start time:
         self.start_time = time.time()
@@ -557,7 +563,9 @@ class SegmentSolution:
         output_path = os.path.join(output_dir, output_name)
         os.makedirs(output_dir, exist_ok=True)
         assert self.optimal_solution is not None
-        self.optimal_solution = self.optimal_solution[self.optimal_solution.clone != "diploid"]
+        self.optimal_solution = self.optimal_solution[
+            self.optimal_solution.clone != "diploid"
+        ]
         if self.output_all_solutions:
             all_solutions = self.get_all_simplified_solution()
             all_solutions_output_path = output_path.replace("optimal", "all")

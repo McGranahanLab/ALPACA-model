@@ -47,51 +47,64 @@ def get_cn_change_to_ancestor(tree_path: str, tumour_df_path: str) -> pd.DataFra
 
 
 ### calculate_ccd ###
-def calculate_ccd(results_path,metric='euclidean'):
-    '''
-    example data:     
+def calculate_ccd(results_path, metric="euclidean"):
+    """
+    example data:
         clone  pred_CN_A  pred_CN_B   segment
     0   clone1          1          3  1_10_100
     1  clone10          1          3  1_10_100
     2  clone12          1          2  1_10_100
-    '''
+    """
     logger = logging.getLogger("ccd")
     results_df = pd.read_csv(results_path)
     # validate input:
     # check if columns tumour_id, clone and segment are strings, while pred_CN_A and pred_CN_B are integers:
-    if not all(results_df[col].dtype == 'object' for col in ['tumour_id', 'clone', 'segment']):
+    if not all(
+        results_df[col].dtype == "object" for col in ["tumour_id", "clone", "segment"]
+    ):
         raise ValueError("tumour_id, clone and segment should be strings")
-    if not all(results_df[col].dtype == 'int' for col in ['pred_CN_A', 'pred_CN_B']):   
+    if not all(results_df[col].dtype == "int" for col in ["pred_CN_A", "pred_CN_B"]):
         raise ValueError("pred_CN_A and pred_CN_B should be integers")
     # check for any NaN or empty values in the required columns:
-    required_columns = ['tumour_id', 'clone', 'segment', 'pred_CN_A', 'pred_CN_B']
+    required_columns = ["tumour_id", "clone", "segment", "pred_CN_A", "pred_CN_B"]
     for col in required_columns:
-        if results_df[col].isnull().any() or (results_df[col] == '').any():
+        if results_df[col].isnull().any() or (results_df[col] == "").any():
             raise ValueError(f"Column {col} contains NaN or empty values")
     # check if the segment column contains the expected format:
-    if not all(results_df['segment'].str.match(r'^\d+_\d+_\d+$')):
-        raise ValueError("segment column should contain the format 'chromosome_start_end'")
+    if not all(results_df["segment"].str.match(r"^\d+_\d+_\d+$")):
+        raise ValueError(
+            "segment column should contain the format 'chromosome_start_end'"
+        )
     results_per_tumour = []
-    tumour_ids = results_df['tumour_id'].unique()
+    tumour_ids = results_df["tumour_id"].unique()
     logger.info(f"Found {len(tumour_ids)} unique tumours")
-    for tumour_id, tumour_df in results_df.groupby('tumour_id'):
-        tumour_df['chromosome'] = tumour_df['segment'].str.split('_',expand=True)[0].astype(int)
-        tumour_df['start'] = tumour_df['segment'].str.split('_',expand=True)[1].astype(int)
+    for tumour_id, tumour_df in results_df.groupby("tumour_id"):
+        tumour_df["chromosome"] = (
+            tumour_df["segment"].str.split("_", expand=True)[0].astype(int)
+        )
+        tumour_df["start"] = (
+            tumour_df["segment"].str.split("_", expand=True)[1].astype(int)
+        )
         distance_func = getattr(distance, metric)
-        tumour_df = tumour_df.sort_values(['chromosome','start','clone'])
-        vectors = [tumour_df[tumour_df.clone==clone][['pred_CN_A','pred_CN_B']].unstack().values for clone in tumour_df.clone.unique()]
+        tumour_df = tumour_df.sort_values(["chromosome", "start", "clone"])
+        vectors = [
+            tumour_df[tumour_df.clone == clone][["pred_CN_A", "pred_CN_B"]]
+            .unstack()
+            .values
+            for clone in tumour_df.clone.unique()
+        ]
         vectors_names = [clone for clone in tumour_df.clone.unique()]
         max_difference = 0
         differences = []
         for i in range(len(vectors)):
-            for j in range(i+1, len(vectors)):
+            for j in range(i + 1, len(vectors)):
                 diff = distance_func(vectors[i], vectors[j])
                 differences.append(diff)
                 if diff > max_difference:
                     max_difference = diff
                     most_different_vectors = (vectors_names[i], vectors_names[j])
-        tumour_df['CCD'] = max_difference
-        tumour_results_df = tumour_df[['tumour_id','CCD']].drop_duplicates().copy()
+        tumour_df["CCD"] = max_difference
+        tumour_results_df = tumour_df[["tumour_id", "CCD"]].drop_duplicates().copy()
         results_per_tumour.append(tumour_results_df)
     ccd_df = pd.concat(results_per_tumour, ignore_index=True)
     return ccd_df

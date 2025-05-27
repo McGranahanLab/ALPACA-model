@@ -9,6 +9,7 @@ from datetime import datetime
 import logging
 from alpaca.utils import create_logger, save_dataframe_to_csv
 
+
 def input_conversion():
     """
     Wrapper function to execute input_conversion.sh from submodule
@@ -17,11 +18,17 @@ def input_conversion():
     try:
         # check if all file in sys.argv exist:
         for i, arg in enumerate(sys.argv[1:], start=1):
-            if '=' not in arg and ('/' in arg or '\\' in arg or '.' in arg):
+            if "=" not in arg and ("/" in arg or "\\" in arg or "." in arg):
                 exists = os.path.exists(arg)
-                print(f"Argument {i} ({arg}): {'Exists' if exists else 'DOES NOT EXIST'}")
+                print(
+                    f"Argument {i} ({arg}): {'Exists' if exists else 'DOES NOT EXIST'}"
+                )
         # Locate the input_conversion.sh script
-        script_path = str(files("alpaca").joinpath("scripts/submodules/alpaca_input_formatting/input_conversion.sh"))
+        script_path = str(
+            files("alpaca").joinpath(
+                "scripts/submodules/alpaca_input_formatting/input_conversion.sh"
+            )
+        )
         print(script_path)
         # Locate the submodules directory
         submodules_path = str(files("alpaca").joinpath("scripts/submodules"))
@@ -56,11 +63,11 @@ def input_conversion():
 
 def run_get_cn_change_to_ancestor():
     """CLI wrapper for get_cn_change_to_ancestor"""
-    logger = create_logger(name='ancestor-delta', log_dir='logs')
+    logger = create_logger(name="ancestor-delta", log_dir="logs")
     parser = argparse.ArgumentParser(
         description="Compute copy number changes to ancestor and save to CSV."
     )
-    parser.add_argument('command', choices=['ancestor-delta'], help='Command to run')
+    parser.add_argument("command", choices=["ancestor-delta"], help="Command to run")
     parser.add_argument("--tree_path", help="Path to the tree file", required=True)
     parser.add_argument(
         "--tumour_df_path",
@@ -68,7 +75,9 @@ def run_get_cn_change_to_ancestor():
         required=True,
     )
     parser.add_argument(
-        "--output_directory", help="Directory to save the output CSV file", required=True
+        "--output_directory",
+        help="Directory to save the output CSV file",
+        required=True,
     )
 
     args = parser.parse_args()
@@ -86,8 +95,14 @@ def run_get_cn_change_to_ancestor():
         cn_change_to_ancestor_df = get_cn_change_to_ancestor(
             args.tree_path, args.tumour_df_path
         )
-        save_dataframe_to_csv(df = cn_change_to_ancestor_df, output_dir = args.output_directory, output_filename = "cn_change_to_ancestor.csv")
-        logger.info(f"Analysis completed successfully. Output saved to: {args.output_directory}")
+        save_dataframe_to_csv(
+            df=cn_change_to_ancestor_df,
+            output_dir=args.output_directory,
+            output_filename="cn_change_to_ancestor.csv",
+        )
+        logger.info(
+            f"Analysis completed successfully. Output saved to: {args.output_directory}"
+        )
 
     except Exception as e:
         logger.exception(f"An error occurred during analysis: {e}")
@@ -96,11 +111,11 @@ def run_get_cn_change_to_ancestor():
 
 def run_calculate_ccd():
     """CLI wrapper for calculate_ccd"""
-    logger = create_logger(name='ccd_analysis', log_dir='logs')
+    logger = create_logger(name="ccd_analysis", log_dir="logs")
     parser = argparse.ArgumentParser(
         description="Compute clone copy number diversity and save results."
     )
-    parser.add_argument('command', choices=['ccd'], help='Command to run')
+    parser.add_argument("command", choices=["ccd"], help="Command to run")
     parser.add_argument(
         "--alpaca_output_path",
         help="Path to the results dataframe file (CSV format), either the entire cohort or a single tumour",
@@ -116,12 +131,14 @@ def run_calculate_ccd():
         logger.error(f"Tumour dataframe file not found: {args.alpaca_output_path}")
         exit(1)
     # check if first row of the file contains columns 'tumour_id' and 'pred_CN_A' and 'pred_CN_B':
-    with open(args.alpaca_output_path, 'r') as f:
-        header = f.readline().strip().split(',')
-        required_columns = ['tumour_id', 'clone', 'segment', 'pred_CN_A', 'pred_CN_B']
+    with open(args.alpaca_output_path, "r") as f:
+        header = f.readline().strip().split(",")
+        required_columns = ["tumour_id", "clone", "segment", "pred_CN_A", "pred_CN_B"]
         missing_columns = [col for col in required_columns if col not in header]
         if missing_columns:
-            logger.error(f"Tumour dataframe file does not contain required columns: {missing_columns}")
+            logger.error(
+                f"Tumour dataframe file does not contain required columns: {missing_columns}"
+            )
             exit(1)
     try:
         logger.info("Starting CCD analysis...")

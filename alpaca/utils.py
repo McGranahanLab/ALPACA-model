@@ -18,7 +18,9 @@ def show_version():
 
 
 def show_help():
-    print("ALPACA = ALlele-specific Phylogenetic Analysis of clone Copy-number Alterations")
+    print(
+        "ALPACA = ALlele-specific Phylogenetic Analysis of clone Copy-number Alterations"
+    )
     print_logo()
     print("")
     print("Usage:")
@@ -36,11 +38,11 @@ def show_help():
 def create_logger(name: str, log_dir: Optional[str] = None) -> logging.Logger:
     """
     Create a named logger with both console and file handlers.
-    
+
     Args:
         name: Name for the logger
         log_dir: Optional directory for log files (defaults to current directory)
-    
+
     Returns:
         Configured logger instance
     """
@@ -49,36 +51,36 @@ def create_logger(name: str, log_dir: Optional[str] = None) -> logging.Logger:
     # check for active handlers
     if logger.handlers:
         return logger
-    
+
     logger.setLevel(logging.INFO)
     formatter = logging.Formatter(
         fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
-    
+
     # Console handler
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
-    
+
     # File handler
     log_time = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_filename = f"{name}_log_{log_time}.log"
-    
+
     if log_dir:
         os.makedirs(log_dir, exist_ok=True)
         log_path = os.path.join(log_dir, log_filename)
     else:
         log_path = log_filename
-    
+
     file_handler = logging.FileHandler(log_path)
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
-    
+
     logger.info(f"Logger '{name}' initialized. Log file: {log_path}")
-    
+
     return logger
 
 
@@ -104,7 +106,11 @@ def split_to_segments(tumour_dir: str) -> list[str]:
 def concatenate_output(output_dir: str) -> str:
     logger = logging.getLogger("ALPACA")
     # keep only segment files in output files list
-    output_files = [f for f in os.listdir(output_dir) if f.endswith(".csv") and (("optimal" in f) or ('all' in f))]
+    output_files = [
+        f
+        for f in os.listdir(output_dir)
+        if f.endswith(".csv") and (("optimal" in f) or ("all" in f))
+    ]
     dfs = [pd.read_csv(f"{output_dir}/{f}") for f in output_files]
     concatenated_df = pd.concat(dfs)
     tumour_id = concatenated_df["tumour_id"].iloc[0]
@@ -209,10 +215,11 @@ def print_logo():
     """
     )
 
+
 def save_dataframe_to_csv(df: pd.DataFrame, output_dir: str, output_filename: str):
     """
     Save a DataFrame to a CSV file.
-    
+
     Args:
         df: DataFrame to save
         output_dir: Path to directory where the CSV file will be saved

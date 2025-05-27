@@ -5,7 +5,15 @@ from tqdm import tqdm
 from io import StringIO
 from datetime import datetime
 from alpaca.ALPACA_segment_solution_class import SegmentSolution
-from alpaca.utils import show_version, show_help, print_logo, concatenate_output, set_run_mode, create_logger, save_dataframe_to_csv
+from alpaca.utils import (
+    show_version,
+    show_help,
+    print_logo,
+    concatenate_output,
+    set_run_mode,
+    create_logger,
+    save_dataframe_to_csv,
+)
 from alpaca.make_configuration import make_config
 from alpaca.analysis import get_cn_change_to_ancestor
 import alpaca.scripts as scripts
@@ -15,22 +23,22 @@ def main():
 
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
-    if command in ['version', '--version', '-v']:
+    if command in ["version", "--version", "-v"]:
         show_version()
         return
-    elif command in ['help', '--help', '-h']:
+    elif command in ["help", "--help", "-h"]:
         show_help()
         return
-    elif command == 'input-conversion':
+    elif command == "input-conversion":
         scripts.input_conversion()
         return
-    elif command == 'ancestor-delta':
+    elif command == "ancestor-delta":
         scripts.run_get_cn_change_to_ancestor()
         return
-    elif command == 'ccd':
+    elif command == "ccd":
         scripts.run_calculate_ccd()
         return
-    elif command == 'run':
+    elif command == "run":
         run_alpaca()
     else:
         print(f"Unknown command: {command}")
@@ -40,7 +48,7 @@ def main():
 
 def run_alpaca():
     # Configure logging
-    logger  = create_logger(name = "ALPACA", log_dir = "logs")
+    logger = create_logger(name="ALPACA", log_dir="logs")
     logger.info("Starting ALPACA")
     config = make_config(sys.argv[1:])
     debug = config["preprocessing_config"]["debug"]
@@ -59,7 +67,7 @@ def run_alpaca():
             total=len(config["preprocessing_config"]["input_files"]),
             desc="Processing files",
             unit="file",
-            file=sys.stderr 
+            file=sys.stderr,
         )
         original_stdout = sys.stdout
         if os.name == "nt":  # Windows
@@ -79,13 +87,21 @@ def run_alpaca():
             else:
                 logger.info(f"Segment {input_file_name} solved.")
         if run_mode == "tumour":
-            concatenated_output_path = concatenate_output(config["preprocessing_config"]["output_directory"])
+            concatenated_output_path = concatenate_output(
+                config["preprocessing_config"]["output_directory"]
+            )
             logger.info("Calculating copy number change to ancestor...")
             cn_change_to_ancestor_df = get_cn_change_to_ancestor(
-            f"{SS.tumour_dir}/tree_paths.json", concatenated_output_path
+                f"{SS.tumour_dir}/tree_paths.json", concatenated_output_path
             )
-            save_dataframe_to_csv(df = cn_change_to_ancestor_df, output_dir = SS.config["preprocessing_config"]["output_directory"], output_filename = "cn_change_to_ancestor.csv")
-            logger.info(f"Analysis completed successfully. Output saved to: {SS.config["preprocessing_config"]["output_directory"]}")
+            save_dataframe_to_csv(
+                df=cn_change_to_ancestor_df,
+                output_dir=SS.config["preprocessing_config"]["output_directory"],
+                output_filename="cn_change_to_ancestor.csv",
+            )
+            logger.info(
+                f"Analysis completed successfully. Output saved to: {SS.config["preprocessing_config"]["output_directory"]}"
+            )
         logger.info("Done")
     except Exception as e:
         logger.error(f"An error occurred: {e}")
