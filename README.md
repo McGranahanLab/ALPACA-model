@@ -1,5 +1,22 @@
 # ALPACA
-
+```
+    _____ __    _____ _____ _____ _____
+    |  _  |  |  |  _  |  _  |     |  _  |
+    |     |  |__|   __|     |   --|     |
+    |__|__|_____|__|  |__|__|_____|__|__|
+    /\\⌒⌒⌒/\\
+    (⦿   ⦿)
+    ( 'Y' )
+     (   )
+     (   )
+     (   )
+     (~ ~~~~~~~~~~)
+     ( ~ ~~   ~~  )
+     ( ~  ~ ~  ~  )
+     (~  ~~~~~   ~)
+     │ │      │ │
+     │ │      │ │
+```
 Repository containing core ALPACA code
 
 <!-- TOC start (generated with https://github.com/derlin/bitdowntoc) -->
