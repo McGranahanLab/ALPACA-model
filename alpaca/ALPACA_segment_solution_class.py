@@ -237,7 +237,7 @@ def validate_inputs(
         raise ValueError("Segments in input table and ci_table do not match")
     # check if all columns are present in the input table:
     expected_columns = ["sample", "cpnA", "cpnB", "segment", "tumour_id"]
-    if set(it.columns) != set(expected_columns):
+    if not set(it.columns).issubset(set(expected_columns)):
         raise ValueError("Input table does not contain all expected columns")
     # check if clone proportions sum to 1 for each sample
     proportions_expressed_as_percents = (cpt.sum() > 10).any()
