@@ -219,16 +219,16 @@ def validate_inputs(
     cpt_samples = set(cpt.columns)
     cit_samples = set(cit["sample"].unique())
     if (
-        it_samples != cpt_samples
-        or cpt_samples != cit_samples
-        or it_samples != cit_samples
+        (it_samples != cpt_samples)
+        or (cpt_samples != cit_samples)
+        or (it_samples != cit_samples)
     ):
-        print("------ERROR------")
-        print("Sample names in input table:", sorted(list(it_samples)))
-        print("Sample names in clone proportions table:", sorted(list(cpt_samples)))
-        print("Sample names in confidence intervals table:", sorted(list(cit_samples)))
+        error_msg = f"""
+        Sample names in input table: {sorted(list(it_samples))}
+        Sample names in clone proportions table: {sorted(list(cpt_samples))}
+        Sample names in confidence intervals table: {sorted(list(cit_samples))}"""
         raise ValueError(
-            "Sample names in input table, cp_table and ci_table do not match"
+            f"Sample names in input table, cp_table and ci_table do not match\n{error_msg}"
         )
     # check if segment is present in the ci_table:
     it_segments = set(it["segment"].unique())
@@ -238,7 +238,9 @@ def validate_inputs(
     # check if all columns are present in the input table:
     expected_columns = ["sample", "cpnA", "cpnB", "segment", "tumour_id"]
     if not set(expected_columns).issubset(set(it.columns)):
-        raise ValueError(f"Input table does not contain all expected columns.\nColumns in input table: {sorted(list(it.columns))}\nExpected columns: {sorted(expected_columns)}")
+        raise ValueError(
+            f"Input table does not contain all expected columns.\nColumns in input table: {sorted(list(it.columns))}\nExpected columns: {sorted(expected_columns)}"
+        )
     # check if clone proportions sum to 1 for each sample
     proportions_expressed_as_percents = (cpt.sum() > 10).any()
     if proportions_expressed_as_percents:
