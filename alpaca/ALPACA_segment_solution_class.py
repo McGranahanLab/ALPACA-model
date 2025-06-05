@@ -557,13 +557,29 @@ class SegmentSolution:
         else:
             self.segments_dir = f"{self.tumour_dir}/segments"
 
-    def save_output(self):
-        logger = self.logger
-        end_time = time.time()
+    def output_exists(self):
+        """
+        Checks if the output file already exists.
+        """
+        output_path = self.create_output_path()
+        return os.path.exists(output_path)
+
+    def create_output_path(self):
+        """
+        Creates the output path for the solution based on file name and options.
+        """
         output_name = "optimal_" + self.input_file_name.split("ALPACA_input_table_")[1]
         output_dir = self.config["preprocessing_config"]["output_directory"]
         output_path = os.path.join(output_dir, output_name)
+        return output_path
+
+    def save_output(self):
+        logger = self.logger
+        end_time = time.time()
+        output_path = self.create_output_path()
+        output_dir = os.path.dirname(output_path)
         os.makedirs(output_dir, exist_ok=True)
+        # discard diploid clone:
         assert self.optimal_solution is not None
         self.optimal_solution = self.optimal_solution[
             self.optimal_solution.clone != "diploid"
@@ -583,6 +599,6 @@ class SegmentSolution:
             self.optimal_solution["run_time_seconds"] = total_run_time
         self.optimal_solution.to_csv(output_path, index=False)
         if os.path.exists(output_path):
-            logger.info(f"Segment output created")
+            logger.info("Segment output created")
         else:
             logger.error(f"Output not saved to {output_path}")

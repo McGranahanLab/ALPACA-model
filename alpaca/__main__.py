@@ -3,7 +3,6 @@ import os
 import sys
 from tqdm import tqdm
 from io import StringIO
-from datetime import datetime
 from alpaca.ALPACA_segment_solution_class import SegmentSolution
 from alpaca.utils import (
     show_version,
@@ -77,6 +76,14 @@ def run_alpaca():
     try:
         for input_file_name in config["preprocessing_config"]["input_files"]:
             SS = SegmentSolution(input_file_name, config, logger)
+            if (
+                not config["preprocessing_config"]["overwrite_output"]
+                and SS.output_exists()
+            ):
+                logger.warning(
+                    f"Output for {input_file_name} already exists. Use '--overwrite_output 1' option to overwrite existing output. Skipping this segment."
+                )
+                continue
             SS.run_iterations()
             SS.find_optimal_solution()
             SS.get_solution()
@@ -100,7 +107,7 @@ def run_alpaca():
                 output_filename="cn_change_to_ancestor.csv",
             )
             logger.info(
-                f"Analysis completed successfully. Output saved to: {SS.config["preprocessing_config"]["output_directory"]}"
+                f"""Analysis completed successfully. Output saved to: {SS.config["preprocessing_config"]["output_directory"]}"""
             )
         logger.info("Done")
     except Exception as e:
