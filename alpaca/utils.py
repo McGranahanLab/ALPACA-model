@@ -6,7 +6,6 @@ import importlib
 import logging
 from datetime import datetime
 from typing import Optional
-import logging
 
 
 def show_version():

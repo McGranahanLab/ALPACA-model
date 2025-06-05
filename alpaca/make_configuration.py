@@ -45,7 +45,15 @@ def get_parser():
         "--mode",
         type=str,
         default="tumour",
-        help="Mode of operation. If 'tumour', expect single file with all the segments and output a single file. If 'segment' expect array of files to segment files (can be from different tumours) and create separate outputs for each segment.",
+        help="Mode of operation. If 'tumour', expect single file with all the segments and output a single file.\
+            If 'segment' expect array of files to segment files (can be from different tumours) and create separate outputs for each segment.",
+    )
+    parser.add_argument(
+        "--overwrite_output",
+        type=int,
+        default=1,
+        help="If set to 0, ALPACA will check if solution file for each segment already exits, and will skip iteration if it does. \
+            If set to 1, ALPACA will overwrite existing solution files.",
     )
     parser.add_argument(
         "--output_directory",
@@ -160,6 +168,7 @@ def make_config(args_in):
     }
     preprocessing_config = {
         "mode": args.mode,
+        "overwrite_output": args.overwrite_output,
         "ci_table_name": args.ci_table_name,
         "debug": args.debug,
         "env": ENV,
