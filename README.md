@@ -36,6 +36,7 @@ Repository containing core ALPACA code
       + [Generating ALPACA input from BAM files](#generating-alpaca-input-from-bam-files)
       + [Running ALPACA using CONIPHER and Refphase outputs](#running-alpaca-using-conipher-and-refphase-outputs)
       + [Running ALPACA](#running-alpaca-1)
+      + [Available options](#available-options)
 
 <!-- TOC end -->
 
@@ -356,3 +357,17 @@ ALPACA-model/examples/example_cohort/output/LTX0000
 |LTX0000|2_41509_27282430|clone14|1|2|clone1|1|2|0|0|
 |LTX0000|2_41509_27282430|clone9|1|1|clone2|1|1|0|0|
 |LTX0000|2_41509_27282430|clone15|3|1|clone11|2|1|1|0|
+
+<!-- TOC --><a name="available-options"></a>
+
+### Available options
+
+```bash
+--overwrite_output <value>
+```
+
+Controls whether ALPACA overwrites existing temporary files.
+Allowed values: 0 (do not overwrite, default), 1 (overwrite).
+
+In the default 'tumour' mode, ALPACA iterates sequentially over each segment, saving temporary .csv tables with solutions for each. It then concatenates all segment solutions into one final output file. On systems with time constraints, if ALPACA isn't allocated enough time, the run might be incomplete, resulting in only some segment solutions being present, but not the final file. In such situations, if the user restarts ALPACA, it will begin from scratch and overwrite all previously created files. To reuse these files, run ALPACA with the --overwrite_output 1 option. The default setting for this option is --overwrite_output 0 to prevent unintended reuse of temporary files.
+
