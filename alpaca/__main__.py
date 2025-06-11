@@ -51,6 +51,9 @@ def run_alpaca():
     logger.info("Starting ALPACA")
     config = make_config(sys.argv[1:])
     debug = config["preprocessing_config"]["debug"]
+    if debug:
+        logger.setLevel("DEBUG")
+        logger.info("Debug mode is ON")
     # determine running mode:
     # if 'tumour', expect single file with all the segments and output a single file
     # if 'segment' expect array of files to segment files (can be from different tumours) and create separate outputs for each segment
@@ -84,6 +87,7 @@ def run_alpaca():
                     f"Output for {input_file_name} already exists. Use '--overwrite_output 1' option to overwrite existing output. Skipping this segment."
                 )
                 continue
+            logger.debug(f"Output path: {SS.create_output_path()}")
             SS.run_iterations()
             SS.find_optimal_solution()
             SS.get_solution()
