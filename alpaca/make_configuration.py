@@ -115,6 +115,12 @@ def get_parser():
         type=int,
         help="Ensure that missing clones inherit cn from childen (events go up in the tree)",
     )
+    parser.add_argument(
+        "--d_zero",
+        default=0,
+        type=int,
+        help="Set to true if objective function is expected to reach value of zero (only in certain simulated scenarios)",
+    )
     parser.add_argument("--cpus", default=1, type=int, help="number of available cpus")
     parser.add_argument("--rsc", default=0, type=int, help="remove small clones")
     parser.add_argument(
@@ -165,6 +171,8 @@ def make_config(args_in):
         "time_limit": args.time_limit,
         "cpus": args.cpus,
         "gurobi_logs": args.gurobi_logs,
+        "missing_clones_inherit_from_children_flag": args.missing_clones_inherit_from_children_flag,
+        "d_zero": args.d_zero,
     }
     preprocessing_config = {
         "mode": args.mode,

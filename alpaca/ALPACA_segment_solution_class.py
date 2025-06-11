@@ -239,7 +239,11 @@ def validate_inputs(
     expected_columns = ["sample", "cpnA", "cpnB", "segment", "tumour_id"]
     if not set(expected_columns).issubset(set(it.columns)):
         raise ValueError(
-            f"Input table does not contain all expected columns.\nColumns in input table: {sorted(list(it.columns))}\nExpected columns: {sorted(expected_columns)}"
+            f"""Input table does not contain all expected columns.
+            Columns in input table:
+            {sorted(list(it.columns))}
+            Expected columns:
+            {sorted(expected_columns)}"""
         )
     # check if clone proportions sum to 1 for each sample
     proportions_expressed_as_percents = (cpt.sum() > 10).any()
@@ -316,6 +320,8 @@ class SegmentSolution:
         self.input_data_directory: Optional[str] = None
         self.ccp: bool = True
         self.s_type: str = "s_strictly_decreasing"
+        self.missing_clones_inherit_from_children_flag: bool = True
+        self.d_zero: int = 0
         self.optimal_solution: Optional[Any] = None
         self.optimal_solution_index: Optional[int] = None
         self.elbow: Dict[str, Any] = {}
@@ -338,6 +344,8 @@ class SegmentSolution:
         # load config
         # default values present in the config object will overwrite the default values defined above
         for key, value in self.config["preprocessing_config"].items():
+            setattr(self, key, value)
+        for key, value in self.config["model_config"].items():
             setattr(self, key, value)
         self.input_file_name = input_file_name
         self.tumour_id, self.segment = split_input_file_name(self.input_file_name)
@@ -398,9 +406,10 @@ class SegmentSolution:
         )
         model_iteration.model.optimize()
         model_iteration.get_output()
-        model_iteration.solution = missing_clones_inherit_from_children(
-            model_iteration.solution, self.tree, self.cp_table
-        )  # TODO move this method to Model class
+        if self.missing_clones_inherit_from_children_flag:
+            model_iteration.solution = missing_clones_inherit_from_children(
+                model_iteration.solution, self.tree, self.cp_table
+            )
         self.get_model_metrics(model_iteration)
 
     def stop_conditions_check(self, oft):
@@ -482,6 +491,15 @@ class SegmentSolution:
         }
         self.elbow = s_values
         self.optimal_solution_index = self.elbow[self.s_type]
+        # required for certain simulated scenarios:
+        if (
+            self.config["model_config"]["d_zero"]
+            & (self.elbow_search_df.D_score == 0).any()
+        ):
+            self.optimal_solution_index = self.elbow_search_df.query(
+                "D_score == 0"
+            ).index[0]
+        breakpoint()
 
     def find_optimal_solution(self):
         # check if diploid solution was found:
