@@ -499,7 +499,6 @@ class SegmentSolution:
             self.optimal_solution_index = self.elbow_search_df.query(
                 "D_score == 0"
             ).index[0]
-        breakpoint()
 
     def find_optimal_solution(self):
         # check if diploid solution was found:
