@@ -6,25 +6,38 @@ from functions import calculate_confidence_intervals
 
 # arguments
 parser = argparse.ArgumentParser(
-    description="Calculate confidence intervals from refphase output"
+    description="Calculate confidence intervals from copy-number tool output"
 )
 parser.add_argument(
     "--tumour_id", type=str, help="Unique identifier for the tumour", required=True
 )
 parser.add_argument("--output_dir", type=str, help="Output directory", required=True)
 parser.add_argument(
+    "--chromosome",
+    type=str,
+    required=False,
+    help="Optional chromosome filter (e.g. 1, chr1, X). If set, only this chromosome is processed.",
+)
+parser.add_argument(
+    "--copy_number_tool",
+    type=str,
+    choices=["refphase", "battenberg"],
+    default="refphase",
+    help="Copy-number input source. Default is refphase for backwards compatibility.",
+)
+parser.add_argument(
     "--refphase_segments",
     type=str,
-    help="Location of refphase segments file",
+    help="Location of intermediate segments file",
     required=True,
 )
 parser.add_argument(
-    "--refphase_snps", type=str, help="Location of refphase snps file", required=True
+    "--refphase_snps", type=str, help="Location of intermediate SNPs file", required=True
 )
 parser.add_argument(
     "--refphase_purity_ploidy",
     type=str,
-    help="Location of refphase purity ploidy file",
+    help="Location of intermediate purity ploidy file",
     required=True,
 )
 
@@ -92,12 +105,25 @@ parser.add_argument(
 args = parser.parse_args()
 tumour_id = args.tumour_id
 output_dir = args.output_dir
+copy_number_tool = args.copy_number_tool
+chromosome = args.chromosome
 ci_value = args.ci_value
 n_bootstrap = args.n_bootstrap
 recalculate_not_updated_cns = bool(args.recalculate_not_updated_cns)
 recalculate_updated_cns = bool(args.recalculate_updated_cns)
 recalculate_reference_cns = bool(args.recalculate_reference_cns)
 split_segments = bool(args.split_segments)
+
+if copy_number_tool == "battenberg":
+    # Battenberg path always recalculates copy numbers for all segments.
+    recalculate_not_updated_cns = True
+    recalculate_updated_cns = False
+    recalculate_reference_cns = False
+    print(
+        "Battenberg mode enabled: forcing recalculate_not_updated_cns=1, "
+        "recalculate_updated_cns=0, recalculate_reference_cns=0."
+    )
+
 # create output directory:
 os.makedirs(output_dir, exist_ok=True)
 # read data
@@ -114,7 +140,6 @@ refphase_segments = refphase_segments.rename(
         "patient_tumour": "tumour_id",
     }
 )
-
 refphase_snps = refphase_snps.rename(
     columns={
         "group_name": "sample",
@@ -122,6 +147,13 @@ refphase_snps = refphase_snps.rename(
         "patient_tumour": "tumour_id",
     }
 )
+
+if "was_cn_updated" not in refphase_segments.columns:
+    refphase_segments["was_cn_updated"] = False
+if "is_reference" not in refphase_segments.columns:
+    refphase_segments["is_reference"] = False
+if "phasing" not in refphase_snps.columns:
+    refphase_snps["phasing"] = "a"
 
 
 # sanitize chromosome names:
@@ -146,8 +178,32 @@ def _sanitize_chr_names(df):
     df["chr"] = pd.to_numeric(df["chr"], errors="coerce")
 
 
+def _normalize_chr_value(chr_value):
+    s = str(chr_value)
+    extracted = re.findall(r"([0-9]+|[XYM][Tt]?)", s, flags=re.IGNORECASE)
+    if not extracted:
+        raise ValueError(f"Could not parse chromosome value: {chr_value}")
+    token = extracted[0].upper()
+    token = {"X": "23", "Y": "24", "MT": "25", "M": "25"}.get(token, token)
+    return int(token)
+
+
 _sanitize_chr_names(refphase_segments)
 _sanitize_chr_names(refphase_snps)
+
+if chromosome is not None:
+    target_chr = _normalize_chr_value(chromosome)
+    refphase_segments = refphase_segments[refphase_segments["chr"] == target_chr].copy()
+    refphase_snps = refphase_snps[refphase_snps["chr"] == target_chr].copy()
+    if refphase_segments.empty:
+        raise ValueError(
+            f"No segment rows remain after --chromosome filter ({chromosome})."
+        )
+    if refphase_snps.empty:
+        raise ValueError(
+            f"No SNP rows remain after --chromosome filter ({chromosome})."
+        )
+
 # create segment column by combining chromosome, start and end:
 refphase_segments["segment"] = (
     refphase_segments["chr"].astype(str)
@@ -163,12 +219,17 @@ refphase_segments["segment"] = (
 # segments_above_threshold = SNP_count[SNP_count>args.heterozygous_SNPs_threshold]
 
 # use this to use number of heterozygous SNPs in each sample:
-refphase_segments = refphase_segments.groupby("segment").filter(
-    lambda x: (x["heterozygous_SNP_number"] >= args.heterozygous_SNPs_threshold).all()
-)
+if copy_number_tool == "refphase":
+    refphase_segments = refphase_segments.groupby("segment").filter(
+        lambda x: (x["heterozygous_SNP_number"] >= args.heterozygous_SNPs_threshold).all()
+    )
+else:
+    # Battenberg segments are sample-specific; thresholding should be applied per-row.
+    refphase_segments = refphase_segments[
+        refphase_segments["heterozygous_SNP_number"] >= args.heterozygous_SNPs_threshold
+    ]
 # NB: if segments with 0 SNPs are kept, the copy number for such segments will not be recalculated with calculate_confidence_intervals
 # and confidence interval values will be set to equal the input copy number values.
-
 
 # calculate confidence intervals:
 print(f"Calculating confidence intervals for {tumour_id}")

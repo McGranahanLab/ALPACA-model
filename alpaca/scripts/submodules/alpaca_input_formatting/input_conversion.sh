@@ -15,11 +15,15 @@ fi
 # default arguments
 
 usage() {
-    echo "Usage: $0 --tumour_id TUMOUR_ID --refphase_rData RDATA_PATH --CONIPHER_tree_object TREE_OBJECT_PATH --output_dir OUTPUT_DIR"
+    echo "Usage: $0 --tumour_id TUMOUR_ID --CONIPHER_tree_object TREE_OBJECT_PATH --output_dir OUTPUT_DIR [--copy_number_tool refphase|battenberg] [...]"
     echo
     echo "Arguments:"
     echo "  --tumour_id              Tumour ID (required)"
-    echo "  --refphase_rData         Path to refphase .RData file (required)"
+    echo "  --copy_number_tool       Copy number source tool: refphase|battenberg (optional, default: refphase)"
+    echo "  --chromosome             Optional chromosome filter (e.g. 1, chr1, X). If set, only this chromosome is processed."
+    echo "  --refphase_rData         Path to refphase .RData file (required when --copy_number_tool refphase)"
+    echo "  --battenberg_inventory   Path to Battenberg inventory file (recommended for --copy_number_tool battenberg)"
+    echo "  --battenberg_input_dir   Path to Battenberg directory for auto-discovery (optional for --copy_number_tool battenberg)"
     echo "  --CONIPHER_tree_object   Path to CONIPHER tree object .RDS file (required)"
     echo "  --CONIPHER_tree_index    Selected CONIPHER tree index (optional, default: 1)"
     echo "  --heterozygous_SNPs_threshold  Optional int threshold passed to convert_refphase.py - default value is 5"
@@ -40,11 +44,19 @@ n_bootstrap=100
 recalculate_not_updated_cns=0
 recalculate_updated_cns=0
 recalculate_reference_cns=0
+copy_number_tool="refphase"
+chromosome=""
+battenberg_inventory=""
+battenberg_input_dir=""
 # Parse named arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --tumour_id) tumour_id="$2"; shift ;;
+        --copy_number_tool) copy_number_tool="$2"; shift ;;
+        --chromosome) chromosome="$2"; shift ;;
         --refphase_rData) refphase_rData="$2"; shift ;;
+        --battenberg_inventory) battenberg_inventory="$2"; shift ;;
+        --battenberg_input_dir) battenberg_input_dir="$2"; shift ;;
         --CONIPHER_tree_object) CONIPHER_tree_object="$2"; shift ;;
         --CONIPHER_tree_index) CONIPHER_tree_index="$2"; shift ;;
         --heterozygous_SNPs_threshold) heterozygous_SNPs_threshold="$2"; shift ;;
@@ -60,9 +72,25 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
+copy_number_tool="$(echo "${copy_number_tool}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${copy_number_tool}" != "refphase" && "${copy_number_tool}" != "battenberg" ]]; then
+    echo "Error: --copy_number_tool must be one of: refphase, battenberg" >&2
+    usage
+fi
+
 # Check if required arguments are provided
-if [ -z "$tumour_id" ] || [ -z "$refphase_rData" ] || [ -z "$CONIPHER_tree_object" ] || [ -z "$output_dir" ]; then
+if [ -z "${tumour_id:-}" ] || [ -z "${CONIPHER_tree_object:-}" ] || [ -z "${output_dir:-}" ]; then
     echo "Error: All arguments are required"
+    usage
+fi
+
+if [ "${copy_number_tool}" = "refphase" ] && [ -z "${refphase_rData:-}" ]; then
+    echo "Error: --refphase_rData is required when --copy_number_tool refphase" >&2
+    usage
+fi
+
+if [ "${copy_number_tool}" = "battenberg" ] && [ -z "${battenberg_inventory:-}" ] && [ -z "${battenberg_input_dir:-}" ]; then
+    echo "Error: for --copy_number_tool battenberg, provide --battenberg_inventory and/or --battenberg_input_dir" >&2
     usage
 fi
 
@@ -70,14 +98,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 
 echo "Tumour ID: ${tumour_id}"
-echo "Extract TSV files from RData"
+echo "Copy number tool: ${copy_number_tool}"
 echo "make output directory: $output_dir"
 mkdir -p $output_dir
 
-# exit if refphase_rData does not exist:
-if [ ! -f $refphase_rData ]; then
-    echo "Error: refphase_rData (${refphase_rData}) file does not exist" >&2
-    exit 1
+if [ "${copy_number_tool}" = "refphase" ]; then
+    # exit if refphase_rData does not exist:
+    if [ ! -f "${refphase_rData}" ]; then
+        echo "Error: refphase_rData (${refphase_rData}) file does not exist" >&2
+        exit 1
+    fi
 fi
 
 if ! command -v python3 &> /dev/null; then
@@ -85,13 +115,42 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 echo "===================================="
-echo "Extracting data from REFPHASE output"
-python3 "${SCRIPT_DIR}/convert_refphase_output/extract_rephase_data.py" \
-    --refphase_rData $refphase_rData \
-    --output_dir $output_dir
-if [ $? -ne 0 ]; then
-    echo "Python extract_rephase_data.py failed" >&2
-    exit 1
+if [ "${copy_number_tool}" = "refphase" ]; then
+    echo "Extracting data from REFPHASE output"
+    refphase_extract_cmd=(
+        python3 "${SCRIPT_DIR}/convert_refphase_output/extract_rephase_data.py"
+        --refphase_rData "$refphase_rData"
+        --output_dir "$output_dir"
+    )
+    if [ -n "${chromosome:-}" ]; then
+        refphase_extract_cmd+=(--chromosome "$chromosome")
+    fi
+    "${refphase_extract_cmd[@]}"
+    if [ $? -ne 0 ]; then
+        echo "Python extract_rephase_data.py failed" >&2
+        exit 1
+    fi
+else
+    echo "Extracting data from BATTENBERG output"
+    battenberg_cmd=(
+        python3 "${SCRIPT_DIR}/convert_battenberg_output/extract_battenberg_data.py"
+        --tumour_id "$tumour_id"
+        --output_dir "$output_dir"
+    )
+    if [ -n "${chromosome:-}" ]; then
+        battenberg_cmd+=(--chromosome "$chromosome")
+    fi
+    if [ -n "${battenberg_inventory:-}" ]; then
+        battenberg_cmd+=(--battenberg_inventory "$battenberg_inventory")
+    fi
+    if [ -n "${battenberg_input_dir:-}" ]; then
+        battenberg_cmd+=(--battenberg_input_dir "$battenberg_input_dir")
+    fi
+    "${battenberg_cmd[@]}"
+    if [ $? -ne 0 ]; then
+        echo "Python extract_battenberg_data.py failed" >&2
+        exit 1
+    fi
 fi
 
 refphase_segments_path="${output_dir}/phased_segs.tsv"
@@ -108,20 +167,27 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "===================================="
-echo "Converting REFPHASE output"
-python3 "${SCRIPT_DIR}/convert_refphase_output/convert_refphase.py" \
-    --tumour_id $tumour_id \
-    --output_dir $output_dir \
-    --refphase_segments $refphase_segments_path \
-    --refphase_snps $refphase_snps_path \
-    --refphase_purity_ploidy $refphase_purity_ploidy_path \
-    --conipher_cp_table "${output_dir}/cp_table.csv" \
-    --heterozygous_SNPs_threshold "${heterozygous_SNPs_threshold}" \
-    --ci_value "${ci_value}" \
-    --n_bootstrap "${n_bootstrap}" \
-    --recalculate_not_updated_cns "${recalculate_not_updated_cns}" \
-    --recalculate_updated_cns "${recalculate_updated_cns}" \
+echo "Converting copy number output (${copy_number_tool})"
+convert_cmd=(
+    python3 "${SCRIPT_DIR}/convert_refphase_output/convert_refphase.py"
+    --tumour_id "$tumour_id"
+    --output_dir "$output_dir"
+    --copy_number_tool "$copy_number_tool"
+    --refphase_segments "$refphase_segments_path"
+    --refphase_snps "$refphase_snps_path"
+    --refphase_purity_ploidy "$refphase_purity_ploidy_path"
+    --conipher_cp_table "${output_dir}/cp_table.csv"
+    --heterozygous_SNPs_threshold "${heterozygous_SNPs_threshold}"
+    --ci_value "${ci_value}"
+    --n_bootstrap "${n_bootstrap}"
+    --recalculate_not_updated_cns "${recalculate_not_updated_cns}"
+    --recalculate_updated_cns "${recalculate_updated_cns}"
     --recalculate_reference_cns "${recalculate_reference_cns}"
+)
+if [ -n "${chromosome:-}" ]; then
+    convert_cmd+=(--chromosome "$chromosome")
+fi
+"${convert_cmd[@]}"
 
 if [ $? -ne 0 ]; then
     echo "Python convert_refphase.py failed" >&2
@@ -146,7 +212,11 @@ Script: ${SCRIPT_DIR}/convert_refphase_output/convert_refphase.py
 
 Arguments and values:
     tumour_id: ${tumour_id}
-    refphase_rData: ${refphase_rData}
+    copy_number_tool: ${copy_number_tool}
+    chromosome: ${chromosome:-}
+    refphase_rData: ${refphase_rData:-}
+    battenberg_inventory: ${battenberg_inventory:-}
+    battenberg_input_dir: ${battenberg_input_dir:-}
     CONIPHER_tree_object: ${CONIPHER_tree_object}
     CONIPHER_tree_index: ${CONIPHER_tree_index}
     heterozygous_SNPs_threshold: ${heterozygous_SNPs_threshold}

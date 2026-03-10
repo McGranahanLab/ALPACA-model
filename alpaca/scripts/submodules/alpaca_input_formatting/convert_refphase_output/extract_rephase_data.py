@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import sys
+import re
 
 import numpy as np
 import pandas as pd
@@ -76,7 +77,30 @@ def parse_args() -> argparse.Namespace:
         "--refphase_rData", type=str, required=True, help="Path to refphase .RData file"
     )
     parser.add_argument("--output_dir", type=str, required=True, help="Output directory")
+    parser.add_argument(
+        "--chromosome",
+        type=str,
+        required=False,
+        help="Optional chromosome filter (e.g. 1, chr1, X). If set, only this chromosome is kept.",
+    )
     return parser.parse_args()
+
+
+def _normalize_chr_series(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_numeric_dtype(series):
+        return pd.to_numeric(series, errors="coerce")
+    out = series.astype(str).str.extract(r"([0-9]+|[XYM][Tt]?)", flags=re.IGNORECASE)[0]
+    out = out.replace({"X": "23", "x": "23", "Y": "24", "y": "24", "MT": "25", "M": "25", "mt": "25", "m": "25"})
+    return pd.to_numeric(out, errors="coerce")
+
+
+def _normalize_chr_value(chr_value: str) -> int:
+    extracted = re.findall(r"([0-9]+|[XYM][Tt]?)", str(chr_value), flags=re.IGNORECASE)
+    if not extracted:
+        raise ValueError(f"Could not parse chromosome value: {chr_value}")
+    token = extracted[0].upper()
+    token = {"X": "23", "Y": "24", "MT": "25", "M": "25"}.get(token, token)
+    return int(token)
 
 
 def main() -> int:
@@ -128,6 +152,21 @@ def main() -> int:
             "Converted phased_snps table is missing 'group_name'. "
             f"Columns detected: {list(snps.columns)}"
         )
+
+    if args.chromosome is not None:
+        target_chr = _normalize_chr_value(args.chromosome)
+        phased_segments = phased_segments[
+            _normalize_chr_series(phased_segments["seqnames"]) == target_chr
+        ].copy()
+        snps = snps[_normalize_chr_series(snps["seqnames"]) == target_chr].copy()
+        if phased_segments.empty:
+            raise ValueError(
+                f"No phased segments remain after --chromosome filter ({args.chromosome})."
+            )
+        if snps.empty:
+            raise ValueError(
+                f"No phased SNPs remain after --chromosome filter ({args.chromosome})."
+            )
 
     print("Writing phased segments, snps and purity ploidy to tsv files")
     print(str(output_dir))

@@ -16,6 +16,7 @@ heterozygous_SNPs_threshold=0
 
 alpaca input-conversion \
  --tumour_id $tumour_id \
+ --copy_number_tool refphase \
  --refphase_rData $refphase_rData \
  --CONIPHER_tree_object $CONIPHER_tree_object \
  --CONIPHER_tree_index $CONIPHER_tree_index \

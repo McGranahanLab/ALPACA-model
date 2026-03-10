@@ -248,6 +248,7 @@ conversion_output_dir="examples/example_cohort/input/${tumour_id}"
 
 alpaca input-conversion \
     --tumour_id $tumour_id \
+    --copy_number_tool refphase \
     --refphase_rData $refphase_rData \
     --CONIPHER_tree_object $CONIPHER_tree_object \
     --output_dir $conversion_output_dir
@@ -274,6 +275,7 @@ selected_CONIPHER_tree_index=13
 ```bash
 alpaca input-conversion \
     --tumour_id $tumour_id \
+    --copy_number_tool refphase \
     --refphase_rData $refphase_rData \
     --CONIPHER_tree_object $CONIPHER_tree_object \
     --output_dir $conversion_output_dir \
@@ -288,12 +290,41 @@ You can pass these options to the `alpaca input-conversion` helper (they are for
 
 ```bash
 --heterozygous_SNPs_threshold <int> # (optional, default=5) Minimum supporting het-SNPs per phased segment used by convert_refphase.py: segments with fewer SNPS will be discarded.
+--chromosome <str>               # (optional) Process only a single chromosome (e.g. 1, chr1, X)
 --ci_value <float>                 # (optional, default=0.5) Confidence level for copy-numbers
 --n_bootstrap <int>                # (optional, default=100) Number of bootstrap iterations used to calculate confidence intervals
 --recalculate_not_updated_cns <0|1> # (optional, default=0) If 1, forces recalculation of copy-numbers for segments flagged as not-updated by refphase
 --recalculate_updated_cns <0|1>   # (optional, default=0) If 1, forces recalculation of copy-numbers for segments flagged as updated by refphase
 --recalculate_reference_cns  <0|1>   # (optional, default=0) If 1, forces recalculation of copy-numbers for segments flagged as 'reference' by refphase
 ```
+
+You can choose the copy-number source tool:
+
+```bash
+--copy_number_tool <refphase|battenberg> # (optional, default=refphase)
+```
+
+For Battenberg input, use either an inventory file (recommended) or directory discovery:
+
+```bash
+--copy_number_tool battenberg
+--battenberg_inventory <path>  # recommended
+# OR
+--battenberg_input_dir <path>  # optional auto-discovery mode
+```
+
+Battenberg inventory should contain one row per sample.
+Required columns:
+`logr_segmented_path`, `mutant_logr_path`, `heterozygous_baf_path` (or `baf_segmented_path`), `purity_ploidy_path`.
+Optional columns:
+`sample` (or `sample_name`) and `tumour_id` (or `tumor_id` / `case_id`).
+
+You can use a single inventory file for multiple tumours. If a tumour column exists, rows are filtered to the `--tumour_id` provided to `alpaca input-conversion`.
+
+In discovery mode, files are matched by sample prefix and purity/ploidy files are searched with:
+`<sample_name>_battenbergA*purity_ploidy.txt*`.
+BAF files are matched as `<sample_name>*BAFsegmented.txt*`, and values are read from the exact `BAFsegmented` column.
+If multiple purity/ploidy files match, the file containing `default` in its name is preferred.
 
 Notes:
 - `--recalculate_not_updated_cns`. Refphase is using multiple samples to improve phasing. To do so, it first partitions genome of all samples (from the same tumour) into "consistent segments". After this step, each sample will have the same number of segments defined by the same breakpoints. This means, that in some sample, two segments in sequence might have the same copy-number, and yet be considered separate. Next, for each of the consistent segments, refphase attempts to perform phasing and updates the copy-numbers accordingly. This means that for "copy-number updated" segments the final copy-number will differ from the original copy numbers of the parent segment. This argument controls the fate of the other segmnets, i.e. the ones where phasing was not performed. We can either keep the original copy number (derived from all the SNPs on the parent segment), or update it using only the SNPs present on the consisent, non 'copy-number updated' segment.
@@ -607,4 +638,3 @@ Practical notes:
 2. Solver-native logs (via --solver_logs option) currently work only for Gurobi.
 3. Most solver metrics work only for Gurobi.
 4. On simulated dataset, SCIP and GLPK produce results only slightly worse to Gurobi (GLPK slightly better than SCIP), but both fail for a small number of segments (GLPK failed on 14 out of 90220 segment, SCIP failed on 490 out of 90220 segments). 
-
