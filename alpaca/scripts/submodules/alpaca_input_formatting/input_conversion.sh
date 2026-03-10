@@ -28,6 +28,7 @@ usage() {
     echo "  --recalculate_not_updated_cns  If set to 1, forces recalculation of copy numbers for segments that were not updated by Refphase (default: 0)"
     echo "  --recalculate_updated_cns      If set to 1, forces recalculation of copy numbers for segments that were updated by Refphase (default: 0)"
     echo "  --recalculate_reference_cns    If set to 1, forces recalculation of copy numbers for reference segments (default: 0)"
+    echo "  --debug                  If set, writes a detailed debug report for convert_refphase.py (default: off)"
     echo "  --output_dir             Output directory (required)"
     echo "  --help                   Display this help message"
     exit 1
@@ -40,6 +41,7 @@ n_bootstrap=100
 recalculate_not_updated_cns=0
 recalculate_updated_cns=0
 recalculate_reference_cns=0
+debug=0
 # Parse named arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -53,6 +55,7 @@ while [[ "$#" -gt 0 ]]; do
         --recalculate_not_updated_cns) recalculate_not_updated_cns="$2"; shift ;;
         --recalculate_updated_cns) recalculate_updated_cns="$2"; shift ;;
         --recalculate_reference_cns) recalculate_reference_cns="$2"; shift ;;
+        --debug) debug=1 ;;
         --output_dir) output_dir="$2"; shift ;;
         --help) usage ;;
         *) echo "Unknown parameter passed: $1"; usage ;;
@@ -109,19 +112,25 @@ if [ $? -ne 0 ]; then
 fi
 echo "===================================="
 echo "Converting REFPHASE output"
-python3 "${SCRIPT_DIR}/convert_refphase_output/convert_refphase.py" \
-    --tumour_id $tumour_id \
-    --output_dir $output_dir \
-    --refphase_segments $refphase_segments_path \
-    --refphase_snps $refphase_snps_path \
-    --refphase_purity_ploidy $refphase_purity_ploidy_path \
-    --conipher_cp_table "${output_dir}/cp_table.csv" \
-    --heterozygous_SNPs_threshold "${heterozygous_SNPs_threshold}" \
-    --ci_value "${ci_value}" \
-    --n_bootstrap "${n_bootstrap}" \
-    --recalculate_not_updated_cns "${recalculate_not_updated_cns}" \
-    --recalculate_updated_cns "${recalculate_updated_cns}" \
+convert_refphase_cmd=(
+    python3 "${SCRIPT_DIR}/convert_refphase_output/convert_refphase.py"
+    --tumour_id "${tumour_id}"
+    --output_dir "${output_dir}"
+    --refphase_segments "${refphase_segments_path}"
+    --refphase_snps "${refphase_snps_path}"
+    --refphase_purity_ploidy "${refphase_purity_ploidy_path}"
+    --conipher_cp_table "${output_dir}/cp_table.csv"
+    --heterozygous_SNPs_threshold "${heterozygous_SNPs_threshold}"
+    --ci_value "${ci_value}"
+    --n_bootstrap "${n_bootstrap}"
+    --recalculate_not_updated_cns "${recalculate_not_updated_cns}"
+    --recalculate_updated_cns "${recalculate_updated_cns}"
     --recalculate_reference_cns "${recalculate_reference_cns}"
+)
+if [ "${debug}" -eq 1 ]; then
+    convert_refphase_cmd+=(--debug)
+fi
+"${convert_refphase_cmd[@]}"
 
 if [ $? -ne 0 ]; then
     echo "Python convert_refphase.py failed" >&2
@@ -155,6 +164,7 @@ Arguments and values:
     recalculate_not_updated_cns: ${recalculate_not_updated_cns}
     recalculate_updated_cns: ${recalculate_updated_cns}
     recalculate_reference_cns: ${recalculate_reference_cns}
+    debug: ${debug}
     output_dir: ${output_dir}
 
 REPORT

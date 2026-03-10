@@ -27,3 +27,9 @@ output_dir="/nemo/project/proj-tracerx-lung/tctProjects/CN-CCF/tracerx800/input/
 
 bash input_conversion.sh --tumour_id $tumour_id --refphase_rData $refphase_rData --CONIPHER_tree_object $CONIPHER_tree_object --output_dir $output_dir
 ```
+
+To generate a detailed refphase conversion debug report in the same output directory, add:
+
+```bash
+--debug
+```

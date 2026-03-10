@@ -293,6 +293,7 @@ You can pass these options to the `alpaca input-conversion` helper (they are for
 --recalculate_not_updated_cns <0|1> # (optional, default=0) If 1, forces recalculation of copy-numbers for segments flagged as not-updated by refphase
 --recalculate_updated_cns <0|1>   # (optional, default=0) If 1, forces recalculation of copy-numbers for segments flagged as updated by refphase
 --recalculate_reference_cns  <0|1>   # (optional, default=0) If 1, forces recalculation of copy-numbers for segments flagged as 'reference' by refphase
+--debug                             # (optional, default=off) If provided, writes a detailed per-step convert_refphase debug report in the output directory
 ```
 
 Notes:

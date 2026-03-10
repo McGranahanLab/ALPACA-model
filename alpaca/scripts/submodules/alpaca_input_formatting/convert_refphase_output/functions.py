@@ -160,3 +160,49 @@ def calculate_confidence_intervals(seg_sample_df, ci_value, n_bootstrap, recalcu
         },
         index=[0],
     )
+
+
+class DebugReporter:
+    def __init__(self, enabled, output_dir):
+        self.enabled = enabled
+        self.path = None
+        self._handle = None
+        if self.enabled:
+            self.path = os.path.join(output_dir, "convert_refphase_debug_report.txt")
+            self._handle = open(self.path, "w", encoding="utf-8")
+            self._write(f"convert_refphase debug report\nGenerated: {datetime.utcnow().isoformat()}Z\n")
+
+    def _write(self, text):
+        if not self.enabled:
+            return
+        self._handle.write(f"{text}\n")
+        self._handle.flush()
+
+    def section(self, title, description):
+        if not self.enabled:
+            return
+        self._write(f"\n{'=' * 90}\n{title}\n{'=' * 90}")
+        self._write(description)
+
+    def note(self, message):
+        self._write(message)
+
+    def dataframe(self, name, df):
+        if not self.enabled:
+            return
+        self._write(f"\nDataFrame: {name}")
+        if not isinstance(df, pd.DataFrame):
+            self._write(f"  Not a pandas DataFrame (found {type(df)}).")
+            return
+        self._write(f"  shape: {df.shape}")
+        self._write(f"  columns: {list(df.columns)}")
+        self._write("  head(5):")
+        if df.empty:
+            self._write("  <empty dataframe>")
+        else:
+            self._write(df.head(5).to_string(index=True))
+
+    def close(self):
+        if self._handle is not None:
+            self._handle.close()
+            self._handle = None
