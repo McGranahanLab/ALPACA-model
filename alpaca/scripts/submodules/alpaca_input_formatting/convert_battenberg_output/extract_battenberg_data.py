@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 
 BATTENBERG_PLOIDY_SOURCE_COLUMN = "psi"
+BATTENBERG_SOLUTION_ID = 'A'
 
 
 def _sanitize_chr_series(chr_series: pd.Series) -> pd.Series:
@@ -180,6 +181,17 @@ def _read_inventory(path: Path, tumour_id: str | None = None) -> List[Dict[str, 
         inventory,
         ["purity_ploidy_path", "purity_ploidy", "battenberg_purity_ploidy_path"],
     )
+    subclones_col = _find_col(
+        inventory,
+        [
+            "subclones_path",
+            "subclones_path",
+            "battenberg_subclones_path",
+            "battenberg_subclones_path",
+            "battenberg_solution_path",
+        ],
+        required=False,
+    )
 
     required_cols = [logr_col, mutant_col, het_col, purity_col]
     for col in required_cols:
@@ -194,6 +206,19 @@ def _read_inventory(path: Path, tumour_id: str | None = None) -> List[Dict[str, 
             if sample_col is not None and str(row[sample_col]).strip()
             else _extract_sample_from_logr_segmented(logr_path)
         )
+        if (
+            subclones_col is not None
+            and pd.notna(row[subclones_col])
+            and str(row[subclones_col]).strip()
+        ):
+            subclones_path = _resolve_path(str(row[subclones_col]), base_dir)
+        else:
+            subclones_path = _choose_path(
+                base_dir.rglob(f"{sample}*subclones*.txt*"),
+                label="default Battenberg subclones",
+                sample=sample,
+                preferred_substring="default",
+            )
         resolved_rows.append(
             {
                 "sample": sample,
@@ -201,6 +226,7 @@ def _read_inventory(path: Path, tumour_id: str | None = None) -> List[Dict[str, 
                 "mutant_logr_path": _resolve_path(str(row[mutant_col]), base_dir),
                 "heterozygous_baf_path": _resolve_path(str(row[het_col]), base_dir),
                 "purity_ploidy_path": _resolve_path(str(row[purity_col]), base_dir),
+                "subclones_path": subclones_path,
             }
         )
     return resolved_rows
@@ -225,6 +251,7 @@ def _discover_inventory(input_dir: Path) -> List[Dict[str, Path | str]]:
         mutant_candidates = input_dir.rglob(f"{sample}_mutantLogR_gcCorrected.tab*")
         het_candidates = input_dir.rglob(f"{sample}*BAFsegmented.txt*")
         purity_candidates = input_dir.rglob(f"{sample}_battenbergA*purity_ploidy.txt*")
+        subclones_candidates = input_dir.rglob(f"{sample}*subclones*.txt*")
 
         sample_rows.append(
             {
@@ -239,6 +266,12 @@ def _discover_inventory(input_dir: Path) -> List[Dict[str, Path | str]]:
                 "purity_ploidy_path": _choose_path(
                     purity_candidates,
                     label="purity/ploidy",
+                    sample=sample,
+                    preferred_substring="default",
+                ),
+                "subclones_path": _choose_path(
+                    subclones_candidates,
+                    label="default Battenberg subclones",
                     sample=sample,
                     preferred_substring="default",
                 ),
@@ -364,6 +397,42 @@ def _read_purity_ploidy(path: Path, sample: str) -> Dict[str, float | str]:
     }
 
 
+def _read_subclones(path: Path, chromosome_filter: int | None = None) -> pd.DataFrame:
+    df = _read_table_with_optional_header(
+        path,
+        sep="\t",
+        required_col_groups=[
+            ["chr", "chromosome", "seqnames"],
+            ["startpos", "start"],
+            ["endpos", "end"],
+            ["cntot", "cn_tot", "ntot"],
+            [f"frac1_{BATTENBERG_SOLUTION_ID}"]
+        ],
+        fallback_first_columns=["chr", "startpos", "endpos", "cntot"],
+        min_columns=4,
+    )
+    chr_col = _find_col(df, ["chr", "chromosome", "seqnames"])
+    start_col = _find_col(df, ["startpos", "start"])
+    end_col = _find_col(df, ["endpos", "end"])
+    cntot_col = _find_col(df, ["cntot", "cn_tot", "ntot"])
+    frac_col = _find_col(df, [f"frac1_{BATTENBERG_SOLUTION_ID}"])
+    out = df[[chr_col, start_col, end_col, cntot_col, frac_col]].rename(
+        columns={chr_col: "chr", start_col: "start", end_col: "end", cntot_col: "cntot"}
+    )
+    out["chr"] = _sanitize_chr_series(out["chr"])
+    out["start"] = pd.to_numeric(out["start"], errors="coerce")
+    out["end"] = pd.to_numeric(out["end"], errors="coerce")
+    out["cntot"] = pd.to_numeric(out["cntot"], errors="coerce")
+    out = out.dropna(subset=["chr", "start", "end", "cntot"]).copy()
+    out["chr"] = out["chr"].astype(int)
+    out["start"] = out["start"].astype(int)
+    out["end"] = out["end"].astype(int)
+    if chromosome_filter is not None:
+        out = out[out["chr"] == chromosome_filter].copy()
+    out = out.drop_duplicates(subset=["chr", "start", "end"], keep="first")
+    return out
+
+
 def _estimate_cn_tot(logr: float, purity: float, ploidy: float) -> float:
     cn_tot = (
         purity
@@ -463,11 +532,13 @@ def main() -> int:
         mutant_logr_path = Path(row["mutant_logr_path"])
         heterozygous_baf_path = Path(row["heterozygous_baf_path"])
         purity_ploidy_path = Path(row["purity_ploidy_path"])
+        subclones_path = Path(row["subclones_path"])
         for path in [
             logr_segmented_path,
             mutant_logr_path,
             heterozygous_baf_path,
             purity_ploidy_path,
+            subclones_path,
         ]:
             if not path.exists():
                 raise FileNotFoundError(f"Missing required input file for {sample}: {path}")
@@ -479,12 +550,14 @@ def main() -> int:
                 "mutant_logr_path": str(mutant_logr_path),
                 "heterozygous_baf_path": str(heterozygous_baf_path),
                 "purity_ploidy_path": str(purity_ploidy_path),
+                "subclones_path": str(subclones_path),
             }
         )
 
         logr_segmented = _read_logr_segmented(logr_segmented_path, chromosome_filter)
         mutant_logr = _read_mutant_logr(mutant_logr_path, sample, chromosome_filter)
         het_baf = _read_het_baf(heterozygous_baf_path, sample, chromosome_filter)
+        subclones = _read_subclones(subclones_path, chromosome_filter)
         purity_ploidy = _read_purity_ploidy(purity_ploidy_path, sample)
         if logr_segmented.empty:
             raise ValueError(
@@ -498,15 +571,18 @@ def main() -> int:
             raise ValueError(
                 f"No heterozygous BAF rows remain for sample {sample} after chromosome filtering."
             )
+        if subclones.empty:
+            raise ValueError(
+                f"No default Battenberg subclones rows remain for sample {sample} "
+                "after chromosome filtering."
+            )
 
         snps = het_baf.merge(mutant_logr, on=["chr", "pos"], how="inner")
         if snps.empty:
             raise ValueError(
                 f"No overlapping heterozygous BAF and mutant LogR SNPs found for sample {sample}."
             )
-        # Battenberg BAF file is unphased. For now we place all BAFs on allele "a";
-        # downstream conversion infers allele "b" as 1 - baf when needed.
-        snps["phasing"] = "a"
+        snps["phasing"] = "b"
         snps["group_name"] = sample
         snps["seqnames"] = snps["chr"]
         snps["strand"] = "*"
@@ -525,6 +601,60 @@ def main() -> int:
         ].copy()
 
         segments = _segments_from_logr(logr_segmented)
+        ## retain original cntot value, needed downstream:
+        # keep also clonal/subclonal assignment
+        segments = segments.merge(
+            subclones,
+            on=["chr", "start", "end"],
+            how="left",
+            validate="m:1",
+        )
+        # subclones containes merged segments (larger than derived from logr)
+        # for such segments find matching parent:
+        cols_to_fix = ["cntot", f"frac1_{BATTENBERG_SOLUTION_ID}"]
+        rows_to_fix = segments[cols_to_fix].isna().any(axis=1)
+        if rows_to_fix.any():
+            missing_segments = segments.loc[
+                rows_to_fix, ["segment", "chr", "start", "end"]
+            ].copy()
+            missing_segments["_segment_index"] = missing_segments.index
+            parent_lookup = subclones[["chr", "start", "end", *cols_to_fix]].rename(
+                columns={
+                    "start": "parent_start",
+                    "end": "parent_end",
+                    **{col: f"parent_{col}" for col in cols_to_fix},
+                }
+            )
+            parent_matches = missing_segments.merge(parent_lookup, on="chr", how="left")
+            parent_matches = parent_matches[
+                (parent_matches["parent_start"] <= parent_matches["start"])
+                & (parent_matches["parent_end"] >= parent_matches["end"])
+            ]
+
+            parent_counts = parent_matches["_segment_index"].value_counts()
+            multiple_matches = parent_counts[parent_counts > 1]
+            if not multiple_matches.empty:
+                conflict = segments.loc[multiple_matches.index[0]]
+                raise ValueError(
+                    f"Multiple matching parent segments found in {subclones_path} "
+                    f"for segment {conflict['segment']} "
+                    f"(chr{conflict['chr']}:{conflict['start']}-{conflict['end']}) "
+                    f"in sample {sample}."
+                )
+            if not parent_matches.empty:
+                parent_matches = parent_matches.drop_duplicates("_segment_index").set_index(
+                    "_segment_index"
+                )
+                for col in cols_to_fix:
+                    segments.loc[parent_matches.index, col] = segments.loc[
+                        parent_matches.index, col
+                    ].fillna(parent_matches[f"parent_{col}"])
+        missing_cntot = segments["cntot"].isna().sum()
+        if missing_cntot:
+            raise ValueError(
+                f"Could not map 'cntot' for {missing_cntot} segment(s) in sample {sample} "
+                f"using coordinates from {subclones_path}."
+            )
         segment_counts = _count_snps_per_segment(
             snps.rename(columns={"seqnames": "chr"}), segments
         )
@@ -536,11 +666,11 @@ def main() -> int:
         ploidy = float(purity_ploidy["ploidy"])
         if purity <= 0:
             raise ValueError(f"Purity must be > 0 for sample {sample}, got {purity}.")
-        segments["cn_tot"] = segments["segmented_logr"].apply(
-            lambda x: _estimate_cn_tot(x, purity, ploidy)
-        )
-        segments["cn_a"] = segments["cn_tot"] / 2.0
-        segments["cn_b"] = segments["cn_tot"] / 2.0
+        segments["cn_tot"] = np.nan  # we don't use _estimate_cn_tot here because we just carry over original Battenber cntot values
+        
+        # These dummy fileds are introduced only to match the refphase data format
+        segments["cn_a"] = np.nan
+        segments["cn_b"] = np.nan
 
         segments["group_name"] = sample
         if args.tumour_id:
@@ -558,8 +688,10 @@ def main() -> int:
         segments["is_reference"] = False
         segments["was_cn_updated"] = False
         segments["homozygous_SNP_number"] = 0
-        segments["cn_a_integer"] = np.round(segments["cn_a"]).astype(int)
-        segments["cn_b_integer"] = np.round(segments["cn_b"]).astype(int)
+        segments["cn_a_integer"] = np.nan
+        segments["cn_b_integer"] = np.nan
+        segments['is_clonal'] = segments[f"frac1_{BATTENBERG_SOLUTION_ID}"] == 1
+        breakpoint()
         segments = segments[
             [
                 "group_name",
@@ -570,6 +702,8 @@ def main() -> int:
                 "width",
                 "cn_a",
                 "cn_b",
+                "cn_tot",
+                "cntot",
                 "is_LOH",
                 "mirrored_vs_ref",
                 "any_ai",
@@ -583,6 +717,7 @@ def main() -> int:
                 "homozygous_SNP_number",
                 "cn_a_integer",
                 "cn_b_integer",
+                "is_clonal",
             ]
         ].copy()
 

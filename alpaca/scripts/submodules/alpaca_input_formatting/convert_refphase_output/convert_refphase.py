@@ -2,7 +2,8 @@ import pandas as pd
 import argparse
 import os
 import re
-from functions import calculate_confidence_intervals
+import numpy as np
+from functions import calculate_confidence_intervals, get_consensus_segmentation, calibrate_battenberg_cns_and_cis
 
 # arguments
 parser = argparse.ArgumentParser(
@@ -101,6 +102,8 @@ parser.add_argument(
     help="Split input into separate files for each segment. Useful for parallel processing.",
 )
 
+# placeholder for future argument - currently always set to True
+BATTENBERG_RECALIBRATE_CI = True
 
 args = parser.parse_args()
 tumour_id = args.tumour_id
@@ -292,8 +295,38 @@ confidence_intervals["chr"] = confidence_intervals["segment"].apply(
 confidence_intervals["start"] = confidence_intervals["segment"].apply(
     lambda x: int(x.split("_")[1])
 )
+LOW_SNP_THRESHOLD = 10
+# we don't trust confidence intervals for segments with very low number of heterozygous SNPs, 
+# ensure such segments have confidence intervals of at least 0.5 (i.e. +/- 0.25 around the original copy number value):
+low_snp_ci_span = 0.5
+low_snp_ci_half = low_snp_ci_span / 2.0
+low_snp_segments = pd.MultiIndex.from_frame(
+    refphase_segments.loc[
+        refphase_segments["heterozygous_SNP_number"] <= LOW_SNP_THRESHOLD, ["segment", "sample"]
+    ].drop_duplicates()
+)
+if len(low_snp_segments) > 0:
+    low_snp_mask = pd.MultiIndex.from_frame(
+        confidence_intervals[["segment", "sample"]]
+    ).isin(low_snp_segments)
+    confidence_intervals.loc[low_snp_mask, "lower_CI_A"] = (
+        confidence_intervals.loc[low_snp_mask, "cpnA"] - low_snp_ci_half
+    ).clip(lower=0)
+    confidence_intervals.loc[low_snp_mask, "upper_CI_A"] = (
+        confidence_intervals.loc[low_snp_mask, "cpnA"] + low_snp_ci_half
+    )
+    confidence_intervals.loc[low_snp_mask, "lower_CI_B"] = (
+        confidence_intervals.loc[low_snp_mask, "cpnB"] - low_snp_ci_half
+    ).clip(lower=0)
+    confidence_intervals.loc[low_snp_mask, "upper_CI_B"] = (
+        confidence_intervals.loc[low_snp_mask, "cpnB"] + low_snp_ci_half
+    )
+
 confidence_intervals = confidence_intervals.sort_values(by=["sample", "chr", "start"])
 confidence_intervals.drop(columns=["chr", "start"], inplace=True)
+if copy_number_tool == "battenberg" and BATTENBERG_RECALIBRATE_CI:    
+    confidence_intervals = calibrate_battenberg_cns_and_cis(confidence_intervals, refphase_segments)
+
 ci_table = confidence_intervals.merge(refphase_segments)[
     [
         "segment",
@@ -330,7 +363,7 @@ assert (
 
 # keep only samples present in CONIPHER cp_table:
 ci_table = ci_table[ci_table["sample"].isin(conipher_samples)]
-
+ci_table = get_consensus_segmentation(ci_table)
 alpaca_input = ci_table.copy()
 ci_table.drop(columns=["cn_a", "cn_b", "cpnA", "cpnB", "was_cn_updated"], inplace=True)
 ci_table.to_csv(f"{output_dir}/ci_table.csv", index=False)
