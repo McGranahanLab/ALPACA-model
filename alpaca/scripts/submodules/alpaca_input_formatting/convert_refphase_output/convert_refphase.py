@@ -340,6 +340,11 @@ ci_table = confidence_intervals.merge(refphase_segments)[
         "lower_CI_B",
         "upper_CI_B",
         "was_cn_updated",
+        *(
+            ["is_clonal"]
+            if "is_clonal" in refphase_segments.columns
+            else []
+        ),
     ]
 ].drop_duplicates()
 
@@ -371,7 +376,16 @@ print(f"{tumour_id} done")
 
 # keep only relevant columns:
 print(f"Creating ALPACA input table for {tumour_id}")
-alpaca_input = alpaca_input[["tumour_id", "sample", "segment", "cpnA", "cpnB"]]
+alpaca_input = alpaca_input[
+    [
+        "tumour_id",
+        "sample",
+        "segment",
+        "cpnA",
+        "cpnB",
+        *(["is_clonal"] if "is_clonal" in alpaca_input.columns else []),
+    ]
+]
 # write to file:
 alpaca_input.to_csv(f"{output_dir}/ALPACA_input_table.csv", index=False)
 

@@ -9,7 +9,7 @@ from scipy.stats import norm
 import typing
 from typing import Optional, Dict, Any
 import time
-from alpaca.solvers import ModelInputs, create_solver_backend
+from alpaca.solvers import ModelInputs, SolverResult, create_solver_backend
 from alpaca.utils import read_tree_json
 import logging
 try:
@@ -114,6 +114,32 @@ def missing_clones_inherit_from_children(optimal_solution, tree, cp_table):
                         0
                     ]
     return optimal_solution
+
+
+def coerce_bool_like_series(series: pd.Series) -> pd.Series:
+    if pd.api.types.is_bool_dtype(series):
+        return series.astype("boolean")
+    if pd.api.types.is_numeric_dtype(series):
+        mapped = series.map({1: True, 0: False})
+        mapped[series.isna()] = pd.NA
+        return mapped.astype("boolean")
+    normalized = series.astype(str).str.strip().str.lower()
+    mapped = normalized.map(
+        {
+            "true": True,
+            "false": False,
+            "1": True,
+            "0": False,
+            "yes": True,
+            "no": False,
+            "y": True,
+            "n": False,
+            "t": True,
+            "f": False,
+        }
+    )
+    mapped[series.isna()] = pd.NA
+    return mapped.astype("boolean")
 
 
 def remove_small_clones(cp_table, tree):
@@ -401,6 +427,8 @@ class SegmentSolution:
         self.output_model_selection_table: bool = False
         self.debug: bool = False
         self.extra_columns: list = []
+        self.used_clonal_shortcut: bool = False
+        self.elbow_increase_report: pd.DataFrame = pd.DataFrame()
         # load config
         # default values present in the config object will overwrite the default values defined above
         for key, value in self.config["preprocessing_config"].items():
@@ -487,6 +515,48 @@ class SegmentSolution:
             )
         self.get_model_metrics(solver_result)
 
+    def _build_clonal_shortcut_result(self) -> Optional[SolverResult]:
+        if "is_clonal" not in self.input_table.columns:
+            return None
+        is_clonal = coerce_bool_like_series(self.input_table["is_clonal"])
+        if is_clonal.isna().any() or not bool(is_clonal.all()):
+            return None
+        rounded_cns = self.input_table[["cpnA", "cpnB"]].round().astype(int)
+        unique_states = rounded_cns.drop_duplicates().reset_index(drop=True)
+        if len(unique_states) != 1:
+            return None
+
+        pred_cn_a = int(unique_states.at[0, "cpnA"])
+        pred_cn_b = int(unique_states.at[0, "cpnB"])
+        solution = pd.DataFrame({"clone": self.cp_table.index.to_list()})
+        solution["pred_CN_A"] = pred_cn_a
+        solution["pred_CN_B"] = pred_cn_b
+        solution["complexity"] = 0
+        solution["CI_score"] = 0
+        solution["D_score"] = 0.0
+        solution["variability_penalty_count"] = 0
+        solution["state_change_count"] = 0
+        solution["event_count"] = 0
+        solution["allowed_complexity"] = 0
+        solution["gurobi_time_CI"] = -1
+        solution["gurobi_gap_CI"] = -1
+        solution["gurobi_time_D"] = -1
+        solution["gurobi_gap_D"] = -1
+        solution = solution.sort_values("clone").reset_index(drop=True)
+        return SolverResult(
+            solution=solution,
+            runtime=0.0,
+            backend_name="clonal_shortcut",
+            gap_status={
+                "max_gap": 0,
+                "gap_reason": "clonal_shortcut",
+                "runtime": 0.0,
+                "status": 0,
+            },
+            objective_values={"D_score": 0.0, "CI_score": 0},
+            solver_specific={"shortcut": "is_clonal_identical_integer_cns"},
+        )
+
     def stop_conditions_check(self, oft):
         optimization_time = self.metrics["run_time"][-1]
         time_limit = self.metrics["time_limits"][-1] if self.metrics["time_limits"] else None
@@ -502,6 +572,28 @@ class SegmentSolution:
         return no_improvement_in_D_score & at_least_3_complexities & slow_iteration
 
     def run_iterations(self):
+        shortcut_result = self._build_clonal_shortcut_result()
+        if shortcut_result is not None:
+            print(
+                f"Skipping solver for {self.segment}: segment is clonal and integer "
+                "copy numbers are identical across samples."
+            )
+            self.used_clonal_shortcut = True
+            self.maximum_complexity = 0
+            self.get_model_metrics(shortcut_result)
+            self.solutions_combined = shortcut_result.solution.copy()
+            self.elbow_search_df = self.solutions_combined[
+                ["complexity", "D_score", "CI_score", "allowed_complexity"]
+            ].drop_duplicates(subset="allowed_complexity", keep="first")
+            self.elbow_search_df_strictly_decreasing = self.elbow_search_df.copy()
+            self.elbow = {
+                "s_min": 0,
+                "s_raw": 0,
+                "s_strictly_decreasing": 0,
+                "raw_code": "clonal_shortcut",
+                "dec_code": "clonal_shortcut",
+            }
+            return
         # use heuristics to determine maximum complexity:
         self.maximum_complexity = max(
             20,
@@ -905,10 +997,11 @@ class SegmentSolution:
                     self._plot_elbow(all_dir, elbow_df)
                 # run an unconstrained (no tree_complexity_constr) max-complexity solution
                 # and save it separately so it does not interfere with elbow search
-                try:
-                    self._run_and_save_unconstrained(all_dir)
-                except Exception:
-                    pass
+                if not self.used_clonal_shortcut:
+                    try:
+                        self._run_and_save_unconstrained(all_dir)
+                    except Exception:
+                        pass
             except Exception:
                 # best-effort; do not fail the run if elbow saving fails
                 pass

@@ -185,7 +185,7 @@ def _read_inventory(path: Path, tumour_id: str | None = None) -> List[Dict[str, 
         inventory,
         [
             "subclones_path",
-            "subclones_path",
+            "subclones",
             "battenberg_subclones_path",
             "battenberg_subclones_path",
             "battenberg_solution_path",
@@ -691,7 +691,6 @@ def main() -> int:
         segments["cn_a_integer"] = np.nan
         segments["cn_b_integer"] = np.nan
         segments['is_clonal'] = segments[f"frac1_{BATTENBERG_SOLUTION_ID}"] == 1
-        breakpoint()
         segments = segments[
             [
                 "group_name",
