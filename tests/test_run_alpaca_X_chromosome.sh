@@ -20,4 +20,6 @@ alpaca run \
     --input_tumour_directory "${input_tumour_directory}" \
     --output_directory "${output_directory}" \
     --overwrite_output 0 \
+    --solver pyomo \
+    --pyomo_solver glpk \
     --debug
