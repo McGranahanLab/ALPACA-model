@@ -55,6 +55,7 @@ testpaths = ["tests"]
 pythonpath = ["tests"]
 markers = [
     "integration: tests that invoke the alpaca CLI via subprocess",
+    "requires_gurobi: tests that require a Gurobi licence",
     "requires_r: tests that require Rscript on PATH",
 ]
 
