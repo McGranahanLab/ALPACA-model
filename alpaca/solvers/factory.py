@@ -15,7 +15,7 @@ AVAILABLE_SOLVERS: Dict[str, Type[SolverBackend]] = {
 
 
 def create_solver_backend(name: str, inputs: ModelInputs, config: dict) -> SolverBackend:
-    key = (name or "gurobi").lower()
+    key = (name or "pyomo").lower()
     if key not in AVAILABLE_SOLVERS:
         raise SolverFactoryError(f"Unknown solver backend '{name}'. Available: {sorted(AVAILABLE_SOLVERS.keys())}")
     backend_cls = AVAILABLE_SOLVERS[key]
