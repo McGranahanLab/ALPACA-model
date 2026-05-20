@@ -17,4 +17,3 @@ examples/**/*.json
 examples/**/*.ipynb
 *.log
 tests/compare_solvers/output*
-alpaca/ALPACA_segment_solution_class.py

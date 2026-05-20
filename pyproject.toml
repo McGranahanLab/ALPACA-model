@@ -11,7 +11,6 @@ license = { file = "LICENSE" }
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-    "gurobipy",
     "kneed",
     "kaleido",
     "matplotlib",
@@ -50,3 +49,14 @@ allow-direct-references = true
 
 [project.scripts]
 alpaca = "alpaca.__main__:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+markers = [
+    "integration: tests that invoke the alpaca CLI via subprocess",
+    "requires_r: tests that require Rscript on PATH",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
