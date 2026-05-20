@@ -93,8 +93,8 @@ def get_parser():
     parser.add_argument(
         "--solver",
         type=str,
-        default="gurobi",
-        help="Solver backend to use (options: gurobi, pyomo).",
+        default="pyomo",
+        help="Solver backend to use (options: pyomo, gurobi).",
     )
     parser.add_argument(
         "--pyomo_solver",

@@ -28,7 +28,7 @@ class Model:
         these values and avoid duplicating defaults in multiple places.
         """
         return {
-            "solver": "gurobi",
+            "solver": "pyomo",
             "pyomo_solver": "scip",
             "pyomo_solver_options": {},
             "homozygous_deletion_threshold": 1,
