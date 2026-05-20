@@ -484,7 +484,7 @@ class SegmentSolution:
         validate_inputs(
             it=self.input_table, cpt=self.cp_table, cit=self.ci_table, t=self.tree
         )
-        self.solver_name = self.config["model_config"].get("solver", "gurobi")
+        self.solver_name = self.config["model_config"].get("solver", "pyomo")
         self.model_inputs = ModelInputs(
             segment=self.segment,
             ci_table=self.ci_table,
@@ -522,7 +522,7 @@ class SegmentSolution:
         # Forward output_directory so infeasibility reports are written to the correct location.
         if "output_directory" not in backend_config:
             backend_config["output_directory"] = self.config["preprocessing_config"].get("output_directory", ".")
-        solver_name = backend_config.get("solver", "gurobi")
+        solver_name = backend_config.get("solver", "pyomo")
         solver_logs = backend_config.get("solver_logs")
         if solver_name == "gurobi" and solver_logs and not backend_config.get("gurobi_logs"):
             backend_config["gurobi_logs"] = solver_logs
@@ -870,7 +870,7 @@ class SegmentSolution:
             model_kwargs = {**self.config.get("model_config", {}), "enforce_tree_complexity": False}
             # ensure we do not change allowed_tree_complexity here and let model compute unconstrained optimum
             backend = create_solver_backend(
-                model_kwargs.get("solver", "gurobi"),
+                model_kwargs.get("solver", "pyomo"),
                 self.model_inputs,
                 model_kwargs,
             )
