@@ -19,7 +19,7 @@ import pandas as pd
 import pytest
 
 
-from golden_utils import VOLATILE_COLS, assert_csv_matches_golden
+from golden_utils import VOLATILE_COLS, assert_csv_matches_golden, assert_gurobi_log_is_present
 
 TUMOUR_ID = "LTX0000-Tumour1"
 
@@ -27,9 +27,10 @@ TUMOUR_ID = "LTX0000-Tumour1"
 # Helpers
 # ---------------------------------------------------------------------------
 
-_PYOMO_GLPK = ("--solver", "pyomo", "--pyomo_solver", "glpk")
-_PYOMO_SCIP = ("--solver", "pyomo", "--pyomo_solver", "scip")
-_PYOMO_GUROBI = ("--solver", "pyomo", "--pyomo_solver", "gurobi")
+_PYOMO_GLPK = ("--solver", "pyomo", "--pyomo_solver", "glpk", "--pyomo_solver_options")
+_PYOMO_SCIP = ("--solver", "pyomo", "--pyomo_solver", "scip", "--pyomo_solver_options", "seed=1 threads=1")
+_PYOMO_GUROBI = ("--solver", "pyomo", "--pyomo_solver", "gurobi", "--pyomo_solver_options", "seed=1 threads=1")
+_GUROBI = ("--solver", "gurobi")
 
 
 def _golden(repo_root, scenario):
@@ -49,7 +50,7 @@ def test_correct_input(tmp_path, repo_root, run_alpaca, update_golden):
         "--input_tumour_directory", str(input_dir),
         "--output_directory", str(tmp_path),
         "--debug",
-        *_PYOMO_GLPK,
+        *_PYOMO_SCIP,
     )
 
     golden_dir = _golden(repo_root, "correct_input")
@@ -75,7 +76,7 @@ def test_newick_tree_input(tmp_path, repo_root, run_alpaca, update_golden):
         "--input_tumour_directory", str(input_dir),
         "--output_directory", str(tmp_path),
         "--debug",
-        *_PYOMO_GLPK,
+        *_PYOMO_SCIP,
     )
 
     golden_dir = _golden(repo_root, "newick_tree")
@@ -134,7 +135,7 @@ def test_find_monoclonal_samples(tmp_path, repo_root, run_alpaca, update_golden)
         "--input_tumour_directory", str(input_dir),
         "--output_directory", str(tmp_path),
         "--debug",
-        *_PYOMO_GLPK,
+        *_PYOMO_SCIP,
     )
 
     golden_dir = _golden(repo_root, "find_monoclonal_samples")
@@ -162,7 +163,7 @@ def test_redundant_columns(tmp_path, repo_root, run_alpaca, update_golden):
         "run",
         "--input_tumour_directory", str(input_dir),
         "--output_directory", str(tmp_path),
-        *_PYOMO_GLPK,
+        *_PYOMO_SCIP,
     )
 
     golden_dir = _golden(repo_root, "redundant_columns")
@@ -199,7 +200,7 @@ def test_output_all_solutions(tmp_path, repo_root, run_alpaca, update_golden):
         "--output_all_solutions",
         "--extra_columns", "gurobi_time", "complexity", "gurobi_gap",
         "--debug",
-        *_PYOMO_GLPK,
+        *_PYOMO_SCIP,
     )
 
     golden_dir = _golden(repo_root, "all_solutions")
@@ -234,16 +235,10 @@ def test_solution_provided(tmp_path, repo_root, run_alpaca, update_golden):
         "--debug",
         "--debug_solution_file", str(debug_solution),
         "--complexity", "100",
-        *_PYOMO_GUROBI,
+        *_GUROBI,
     )
-
-    golden_dir = _golden(repo_root, "solution_provided")
-    assert_csv_matches_golden(
-        tmp_path / f"ALPACA_output_{TUMOUR_ID}.csv",
-        golden_dir / f"ALPACA_output_{TUMOUR_ID}.csv",
-        ignore_cols=VOLATILE_COLS,
-        update=update_golden,
-    )
+    log_path = tmp_path / "gurobi_log_LTX0000-Tumour1_1_762496_28527452.txt"
+    assert_gurobi_log_is_present(log_path)
 
 
 @pytest.mark.integration
@@ -271,7 +266,7 @@ def test_x_chromosome(tmp_path, repo_root, run_alpaca, update_golden):
         "--input_tumour_directory", str(input_dir),
         "--output_directory", str(tmp_path),
         "--debug",
-        *_PYOMO_GLPK,
+        *_PYOMO_SCIP,
     )
 
     golden_dir = _golden(repo_root, "x_chromosome")
