@@ -10,6 +10,16 @@ VOLATILE_COLS = ["run_time_seconds"]
 GUROBI_VOLATILE_COLS = VOLATILE_COLS + ["gurobi_time_CI", "gurobi_time_D"]
 
 
+def assert_gurobi_log_is_present(log_path):
+    """Assert that the Gurobi log file was created. When debugging solution provided by the users
+    we are only interested in its feasibility and Gurobi metrics, so the output table is not created"""
+    log_path = Path(log_path)
+    assert log_path.exists(), (
+        f"Gurobi log file not found: {log_path}\n"
+        "This likely means that Gurobi did not run at all, so the provided solution was not even checked."
+    )
+
+
 def assert_csv_matches_golden(actual_path, golden_path, ignore_cols=None, update=False):
     """Compare a CSV file against a committed golden file.
 
