@@ -1,6 +1,6 @@
 Conversion report
 =================
-Date: 2026-05-20T16:12:16Z
+Date: 2026-05-22T15:02:42Z
 Script: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/alpaca/scripts/submodules/alpaca_input_formatting/convert_refphase_output/convert_refphase.py
 
 Arguments and values:
