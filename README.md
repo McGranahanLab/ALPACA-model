@@ -40,6 +40,7 @@ Repository containing core ALPACA code
       + [Nextflow wrapper](#[nextflow-wrapper])
       + [Available options](#available-options)
          - [Solver selection](#solver-selection)
+         - [Reproducibility](#reproducibility)
 
 <!-- TOC end -->
 
@@ -51,28 +52,29 @@ Repository containing core ALPACA code
 <!-- TOC --><a name="installation"></a>
 ### Installation
 
-Start by cloning this repository:
+ALPACA is implemented in Python and requires Linux or macOS.
+
+Install ALPACA from conda (recommended) with either `mamba` or `conda`:
 
 ```bash
-git clone https://github.com/McGranahanLab/ALPACA-model.git
-cd ALPACA-model
+mamba create -n alpaca -c conda-forge alpaca
 ```
 
-ALPACA is implemented in python and requires Linux or macOS. 
-
-To install all the required dependencies use 'alpaca_conda.yml':
+or
 
 ```bash
-conda env create --name alpaca --file environment.yml
+conda create -n alpaca -c conda-forge alpaca
 ```
 
-Next, install ALPACA with pip:
+Then activate the environment:
 
 ```bash
-conda run -n alpaca pip install dist/*.whl
+conda activate alpaca
 ```
 
-ALPACA ships with a Gurobi backend by default—please obtain a free academic license at [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses) if you plan to use it. Alternatively, you can select the new Pyomo backend to run ALPACA with open-source MILP solvers such as CBC or GLPK (see [Solver selection](#solver-selection)).
+Optional solver note: ALPACA can use Gurobi for optimization. If you plan to use the Gurobi backend, install Gurobi and obtain a license (free for academics): [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses). You can also use the Pyomo backend with open-source MILP solvers such as CBC or GLPK (see [Solver selection](#solver-selection)).
+
+Preprocessing note: if you use ALPACA input-conversion utilities based on CONIPHER/Refphase outputs, an R installation is required for that preprocessing step.
 
 <!-- TOC --><a name="testing-installation"></a>
 ### Testing installation
@@ -631,6 +633,20 @@ Practical notes:
 2. Selecting `scip` or `scipampl` automatically raises Pyomo's `ampl_command_timeout` to 10 seconds to prevent slow `scip --version` checks from failing availability detection. You can still override this (or any other) solver parameter through `--pyomo_solver_options`.
 3. Objective-specific metrics (`gurobi_time_*`, `gurobi_gap_*`) and IIS reports are only available when the Gurobi backend is active. Pyomo runs populate the standard columns (`CI_score`, `D_score`, `complexity`, etc.) but leave Gurobi-specific columns at `-1` if requested via `--extra_columns`.
 4. To compare solvers, run the same input twice, e.g. `alpaca run ... --solver gurobi` and `alpaca run ... --solver pyomo --pyomo_solver cbc`, and diff the resulting `optimal_*.csv` files.
+
+<!-- TOC --><a name="reproducibility"></a>
+#### Reproducibility
+
+When multiple solutions achieve the same objective value, MILP solvers use internal tie-breaking heuristics that can vary between runs, machines, or solver versions — producing different-but-equally-valid outputs. To enforce consistent results, fix the solver's random seed and restrict it to a single thread:
+
+```bash
+alpaca run ... --pyomo_solver_options Seed=1 Threads=1
+```
+
+- `Seed=1` fixes the random seed used by the solver's internal tie-breaking. Any fixed integer works; `1` is a conventional choice.
+- `Threads=1` disables parallel solving, which introduces additional non-determinism when multiple CPU threads explore the search tree concurrently.
+
+These options are forwarded via `--pyomo_solver_options` and are supported by Gurobi and SCIP (but only via the Pyomo backend). Parameter names may differ for other solvers — consult your solver's documentation if needed.
 
 #### Known issues:
 

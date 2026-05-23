@@ -1,0 +1,2 @@
+tumour_id,segment,affected_sample,affected_allele,min_ci,timestamp,source_file
+LTX0000-Tumour1,1_762496_28527452,LTX0000_SU_T1-R2--d10280bfc486,B,0.1,2026-05-15T15:13:59.931119,LTX0000-Tumour1_1_762496_28527452_ci_report.json

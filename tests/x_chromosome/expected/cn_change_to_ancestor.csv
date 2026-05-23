@@ -1,0 +1,15 @@
+clone,pred_CN_A,pred_CN_B,complexity,CI_score,D_score,variability_penalty_count,state_change_count,event_count,allowed_complexity,gurobi_time_CI,gurobi_gap_CI,gurobi_time_D,gurobi_gap_D,tumour_id,segment,parent,parent_pred_cpnA,parent_pred_cpnB,cn_dist_to_parent_A,cn_dist_to_parent_B
+clone1,0,3,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone3,1,1,-1,2
+clone11,3,0,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone9,3,0,0,0
+clone14,0,3,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone1,0,3,0,0
+clone15,3,0,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone11,3,0,0,0
+clone16,2,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone17,2,1,0,0
+clone17,2,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone6,2,1,0,0
+clone2,2,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone3,1,1,1,0
+clone20,2,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone4,2,1,0,0
+clone3,1,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,diploid,1,1,0,0
+clone4,2,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone16,2,1,0,0
+clone6,2,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone2,2,1,0,0
+clone7,2,1,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone6,2,1,0,0
+clone8,3,0,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone6,2,1,1,-1
+clone9,3,0,8,0,0.575,0,7,8,8,-1,-1,-1,-1,LTX0000-Tumour1,23_762496_28527452,clone2,2,1,1,-1

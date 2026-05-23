@@ -1,0 +1,31 @@
+Conversion report
+=================
+Date: 2026-05-22T15:02:42Z
+Script: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/alpaca/scripts/submodules/alpaca_input_formatting/convert_refphase_output/convert_refphase.py
+
+Arguments and values:
+    tumour_id: LTX0000-Tumour1
+    copy_number_tool: refphase
+    chromosome: 
+    refphase_rData: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/tests/x_chromosome/input/LTX0000-Tumour1/LTX0000-Tumour1-refphase-results.RData
+    battenberg_inventory: 
+    battenberg_input_dir: 
+    CONIPHER_tree_object: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/tests/x_chromosome/input/LTX0000-Tumour1/LTX0000-Tumour1.tree.RDS
+    CONIPHER_tree_index: 1
+    heterozygous_SNPs_threshold: 5
+    ci_value: 0.5
+    n_bootstrap: 100
+    recalculate_not_updated_cns: 0
+    recalculate_updated_cns: 0
+    recalculate_reference_cns: 0
+    output_dir: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/tests/x_chromosome/input/LTX0000-Tumour1
+
+
+Sample filtering report:
+    Sample consistency check
+    ========================
+    files_checked: 4
+    kept_samples_count: 4
+    kept_samples: LTX0000_SU_T1-R1--eadd4755c486, LTX0000_SU_T1-R2--d10280bfc486, LTX0000_SU_T1-R3--70daf017c486, LTX0000_SU_T1-R4--b599272cc495
+    removed_samples_count: 0
+    removed_samples: none

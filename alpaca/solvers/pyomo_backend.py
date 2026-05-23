@@ -191,8 +191,13 @@ class PyomoBackend(SolverBackend):
         self._set_complexity_constraints()
         self._build_objectives()
         if self.simulate_infeasibility and self.simulate_infeasibility == self.segment:
-            m.simulate_infeasibility_constr = pyo.Constraint(expr=0 >= 1)
-            print(f"simulate_infeasibility: injected infeasible constraint for segment '{self.segment}'")
+            print('Simulating infeasibility...')
+            # Create a dummy variable fixed to 0, then require it to be >= 1 (infeasible)
+            m._inf_dummy = pyo.Var(domain=pyo.NonNegativeIntegers, bounds=(0, 0))
+            m.simulate_infeasibility_constr = pyo.Constraint(expr=m._inf_dummy >= 1)
+            print(
+                f"simulate_infeasibility: injected infeasible constraint for segment '{self.segment}'"
+            )
 
     def _declare_variables(self) -> None:
         assert self.model is not None
@@ -620,6 +625,15 @@ class PyomoBackend(SolverBackend):
     # ------------------------------------------------------------------
     def _run_solver(self, stage: str):
         assert self.model is not None
+        # On macOS, SCIP can be slow to respond to version queries during solver detection.
+        # Set environment variable to increase timeout for solver factory initialization.
+        solver_name_lower = (self.solver_name or "").lower()
+        if solver_name_lower in {"scip", "scipampl"}:
+            import os
+
+            # Set environment variable for Pyomo's subprocess timeout handling
+            os.environ.setdefault("PYOMO_SOLVER_EXEC_TIMEOUT", "30")
+
         solver = pyo.SolverFactory(self.solver_name)
         options = self._solver_options()
         for key, value in options.items():
@@ -679,7 +693,12 @@ class PyomoBackend(SolverBackend):
             import json as _json
             import os as _os
             from datetime import datetime as _dt
-            report_dir = getattr(self, "output_directory", "") or getattr(self, "solver_log_path", "") or _os.getcwd()
+
+            report_dir = (
+                getattr(self, "output_directory", "")
+                or getattr(self, "solver_log_path", "")
+                or _os.getcwd()
+            )
             _os.makedirs(report_dir, exist_ok=True)
             json_path = _os.path.join(
                 report_dir,

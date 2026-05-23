@@ -1,0 +1,68 @@
+{% set version = environ.get("GIT_DESCRIBE_TAG", "0.0.0").lstrip("v") %}
+
+package:
+  name: alpaca
+  version: {{ version }}
+
+source:
+  path: ..
+
+build:
+  number: 0
+  noarch: python
+  script: {{ PYTHON }} -m pip install . --no-deps --ignore-installed -vv
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - hatchling
+    - hatch-vcs
+  run:
+    - python >=3.10
+    - kneed
+    - python-kaleido
+    - matplotlib-base
+    - networkx
+    - numpy
+    - pandas
+    - plotly
+    - scipy
+    - seaborn
+    - rdata
+    - tqdm
+    - pyomo
+    - scip
+    - glpk
+
+test:
+  requires:
+    - pip
+    - pytest
+  commands:
+    - python -c "import alpaca; import alpaca.solvers"
+    - alpaca --help
+
+about:
+  home: https://github.com/McGranahanLab/ALPACA-model
+  license: MIT
+  license_file: LICENSE
+  summary: "ALPACA - Allele-specific Phylogenetic Analysis of Copy-number Aberrations"
+  description: |
+    ALPACA is a computational method to infer allele- and clone-specific
+    copy-number profiles of tumour clones from multi-sample bulk DNA sequencing.
+    The default backend is Pyomo with the SCIP solver.
+    
+    ## Optional Dependencies
+    
+    - **Gurobi solver**: Users with a Gurobi license can install gurobi separately:
+      ```
+      mamba install -c gurobi gurobi>=13
+      grbgetkey YOUR-LICENSE-KEY
+      ```
+    
+    - **R support**: Some input conversion utilities require R and Rscript:
+      ```
+      mamba install r-base
+      ```
+      These are optional and used only for converting ASCAT and Conipher outputs.

@@ -28,7 +28,7 @@ class Model:
         these values and avoid duplicating defaults in multiple places.
         """
         return {
-            "solver": "gurobi",
+            "solver": "pyomo",
             "pyomo_solver": "scip",
             "pyomo_solver_options": {},
             "homozygous_deletion_threshold": 1,
@@ -1157,7 +1157,8 @@ class Model:
             self.output_for_infeasible_models()  # always raises SegmentInfeasibleError
         # if model was run in debug mode with a supplied solution, exit here
         if getattr(self, "debug", False) and getattr(self, "debug_solution_file", False):
-            sys.exit('Model run with supplied solution, exiting. See Gurobi logs for error score and other info.')
+            print('Model run with supplied solution, exiting. See Gurobi logs for error score and other info.')
+            sys.exit(0)
 
         A = pd.DataFrame(
             {

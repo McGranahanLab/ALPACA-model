@@ -37,7 +37,9 @@ def main():
     if command == "input-conversion":
         import alpaca.scripts as scripts
 
-        scripts.input_conversion()
+        rc = scripts.input_conversion()
+        if rc:
+            sys.exit(rc)
         return
     elif command == "ancestor-delta":
         import alpaca.scripts as scripts

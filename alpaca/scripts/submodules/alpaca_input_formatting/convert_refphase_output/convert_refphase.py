@@ -56,8 +56,8 @@ parser.add_argument(
     default=5,
     help="Minimum number of heterozygous SNPs to consider a segment. Segments with fewer heterozygous SNPs will be discarded.",
 )
-parser.add_argument("--ci_value", type=float, help="Confidence interval value.")
-parser.add_argument("--n_bootstrap", type=int, help="Number of bootstrap samples.")
+parser.add_argument("--ci_value", type=float, default=0.95, help="Confidence interval value.")
+parser.add_argument("--n_bootstrap", type=int, default=1000, help="Number of bootstrap samples.")
 parser.add_argument(
     "--recalculate_not_updated_cns",
     type=int,
@@ -358,13 +358,17 @@ for allele in ["A", "B"]:
         ci_table[f"cpn{allele}"] <= ci_table[f"upper_CI_{allele}"]
     ), f"cpn{allele} <= upper_CI_{allele}"
 
-# ensure all input segments are present in output:
-input_segments = refphase_segments["segment"].unique()
-output_segments = ci_table["segment"].unique()
-missing_segments = set(input_segments) - set(output_segments)
+# Segments absent from phased_snps.tsv have no SNP data and cannot have CIs
+# computed — they are legitimately excluded. Only assert on SNP-covered segments.
+snp_covered_segments = set(snps_with_segments_purity_ploidy["segment"].unique())
+output_segments = set(ci_table["segment"].unique())
+missing_segments = snp_covered_segments - output_segments
 assert (
     len(missing_segments) == 0
 ), f"Some input segments are missing in the output: {missing_segments}"
+uncovered_count = len(set(refphase_segments["segment"].unique()) - snp_covered_segments)
+if uncovered_count > 0:
+    print(f"Warning: {uncovered_count} segment(s) had no SNPs in phased_snps.tsv and were excluded from ci_table")
 
 # keep only samples present in CONIPHER cp_table:
 ci_table = ci_table[ci_table["sample"].isin(conipher_samples)]
