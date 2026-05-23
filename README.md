@@ -52,28 +52,29 @@ Repository containing core ALPACA code
 <!-- TOC --><a name="installation"></a>
 ### Installation
 
-Start by cloning this repository:
+ALPACA is implemented in Python and requires Linux or macOS.
+
+Install ALPACA from conda (recommended) with either `mamba` or `conda`:
 
 ```bash
-git clone https://github.com/McGranahanLab/ALPACA-model.git
-cd ALPACA-model
+mamba create -n alpaca -c conda-forge alpaca
 ```
 
-ALPACA is implemented in python and requires Linux or macOS. 
-
-To install all the required dependencies use 'alpaca_conda.yml':
+or
 
 ```bash
-conda env create --name alpaca --file environment.yml
+conda create -n alpaca -c conda-forge alpaca
 ```
 
-Next, install ALPACA with pip:
+Then activate the environment:
 
 ```bash
-conda run -n alpaca pip install dist/*.whl
+conda activate alpaca
 ```
 
-ALPACA ships with a Gurobi backend by default—please obtain a free academic license at [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses) if you plan to use it. Alternatively, you can select the new Pyomo backend to run ALPACA with open-source MILP solvers such as CBC or GLPK (see [Solver selection](#solver-selection)).
+Optional solver note: ALPACA can use Gurobi for optimization. If you plan to use the Gurobi backend, install Gurobi and obtain a license (free for academics): [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses). You can also use the Pyomo backend with open-source MILP solvers such as CBC or GLPK (see [Solver selection](#solver-selection)).
+
+Preprocessing note: if you use ALPACA input-conversion utilities based on CONIPHER/Refphase outputs, an R installation is required for that preprocessing step.
 
 <!-- TOC --><a name="testing-installation"></a>
 ### Testing installation
