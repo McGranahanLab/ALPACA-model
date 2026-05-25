@@ -160,7 +160,9 @@ option_list = list(
   make_option(c("--CONIPHER_tree_index"), type="character",
               help="selected CONIPHER tree index"),
   make_option(c("--output_dir"), type="character", 
-              help="output directory")
+              help="output directory"),
+  make_option(c("--sanitize_cp_table_names"), action="store_true", default=FALSE,
+              help="replace dashes with dots in cp_table column names before writing")
 )
 
 # Create the parser
@@ -171,6 +173,7 @@ parser = OptionParser(
 
 # Parse the arguments
 args = parse_args(parser)
+sanitize_cp_table_names = isTRUE(args$sanitize_cp_table_names)
 
 # Read the tree object and set output directory
 tree_object = readRDS(args$CONIPHER_tree_object)
@@ -193,6 +196,9 @@ clonality_table = tree_object$clonality_out$clonality_table_corrected
 ccf_cluster_table = tree_object$nested_pyclone$ccf_cluster_table
 trunk = tree_object$graph_pyclone$trunk 
 cp_table = get_cp_table(alt_trees, selected_tree_index, clonality_table, ccf_cluster_table, trunk)
+if (sanitize_cp_table_names) {
+  colnames(cp_table) = gsub('-', '.', colnames(cp_table), fixed = TRUE)
+}
 cp_table_path = sprintf('%s/cp_table.csv',output_dir)
 write.csv(cp_table, cp_table_path, row.names = FALSE)
 print('Done')

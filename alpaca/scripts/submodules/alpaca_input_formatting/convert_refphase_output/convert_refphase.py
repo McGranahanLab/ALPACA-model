@@ -2,8 +2,11 @@ import pandas as pd
 import argparse
 import os
 import re
-import numpy as np
-from functions import calculate_confidence_intervals, get_consensus_segmentation, calibrate_battenberg_cns_and_cis
+from functions import (
+    calculate_confidence_intervals,
+    get_consensus_segmentation,
+    calibrate_battenberg_cns_and_cis,
+)
 
 # arguments
 parser = argparse.ArgumentParser(
@@ -22,7 +25,7 @@ parser.add_argument(
 parser.add_argument(
     "--copy_number_tool",
     type=str,
-    choices=["refphase", "battenberg"],
+    choices=["refphase", "battenberg", "battenberg_plus"],
     default="refphase",
     help="Copy-number input source. Default is refphase for backwards compatibility.",
 )
@@ -33,13 +36,22 @@ parser.add_argument(
     required=True,
 )
 parser.add_argument(
-    "--refphase_snps", type=str, help="Location of intermediate SNPs file", required=True
+    "--refphase_snps",
+    type=str,
+    help="Location of intermediate SNPs file",
+    required=False,
 )
 parser.add_argument(
     "--refphase_purity_ploidy",
     type=str,
     help="Location of intermediate purity ploidy file",
-    required=True,
+    required=False,
+)
+parser.add_argument(
+    "--precomputed_ci_table",
+    type=str,
+    required=False,
+    help="Optional table with precomputed CIs (required for copy_number_tool=battenberg_plus)",
 )
 
 parser.add_argument(
@@ -56,8 +68,12 @@ parser.add_argument(
     default=5,
     help="Minimum number of heterozygous SNPs to consider a segment. Segments with fewer heterozygous SNPs will be discarded.",
 )
-parser.add_argument("--ci_value", type=float, default=0.95, help="Confidence interval value.")
-parser.add_argument("--n_bootstrap", type=int, default=1000, help="Number of bootstrap samples.")
+parser.add_argument(
+    "--ci_value", type=float, default=0.95, help="Confidence interval value."
+)
+parser.add_argument(
+    "--n_bootstrap", type=int, default=1000, help="Number of bootstrap samples."
+)
 parser.add_argument(
     "--recalculate_not_updated_cns",
     type=int,
@@ -127,12 +143,39 @@ if copy_number_tool == "battenberg":
         "recalculate_updated_cns=0, recalculate_reference_cns=0."
     )
 
+if copy_number_tool != "battenberg_plus":
+    if not args.refphase_snps:
+        raise ValueError(
+            "--refphase_snps is required unless --copy_number_tool battenberg_plus"
+        )
+    if not args.refphase_purity_ploidy:
+        raise ValueError(
+            "--refphase_purity_ploidy is required unless --copy_number_tool battenberg_plus"
+        )
+if copy_number_tool == "battenberg_plus" and not args.precomputed_ci_table:
+    raise ValueError(
+        "--precomputed_ci_table is required when --copy_number_tool battenberg_plus"
+    )
+
 # create output directory:
 os.makedirs(output_dir, exist_ok=True)
 # read data
 refphase_segments = pd.read_csv(args.refphase_segments, sep="\t")
-refphase_snps = pd.read_csv(args.refphase_snps, sep="\t")
-refphase_purity_ploidy = pd.read_csv(args.refphase_purity_ploidy, sep="\t")
+refphase_snps = (
+    pd.read_csv(args.refphase_snps, sep="\t")
+    if copy_number_tool != "battenberg_plus"
+    else None
+)
+refphase_purity_ploidy = (
+    pd.read_csv(args.refphase_purity_ploidy, sep="\t")
+    if copy_number_tool != "battenberg_plus"
+    else None
+)
+precomputed_ci_table = (
+    pd.read_csv(args.precomputed_ci_table, sep="\t")
+    if args.precomputed_ci_table
+    else None
+)
 cp_table = pd.read_csv(args.conipher_cp_table, index_col="clone")
 conipher_samples = cp_table.columns
 # rename columns:
@@ -143,19 +186,23 @@ refphase_segments = refphase_segments.rename(
         "patient_tumour": "tumour_id",
     }
 )
-refphase_snps = refphase_snps.rename(
-    columns={
-        "group_name": "sample",
-        "seqnames": "chr",
-        "patient_tumour": "tumour_id",
-    }
+refphase_snps = (
+    refphase_snps.rename(
+        columns={
+            "group_name": "sample",
+            "seqnames": "chr",
+            "patient_tumour": "tumour_id",
+        }
+    )
+    if refphase_snps is not None
+    else None
 )
 
 if "was_cn_updated" not in refphase_segments.columns:
     refphase_segments["was_cn_updated"] = False
 if "is_reference" not in refphase_segments.columns:
     refphase_segments["is_reference"] = False
-if "phasing" not in refphase_snps.columns:
+if refphase_snps is not None and "phasing" not in refphase_snps.columns:
     refphase_snps["phasing"] = "a"
 
 
@@ -192,17 +239,23 @@ def _normalize_chr_value(chr_value):
 
 
 _sanitize_chr_names(refphase_segments)
-_sanitize_chr_names(refphase_snps)
+if refphase_snps is not None and not refphase_snps.empty:
+    _sanitize_chr_names(refphase_snps)
 
 if chromosome is not None:
     target_chr = _normalize_chr_value(chromosome)
     refphase_segments = refphase_segments[refphase_segments["chr"] == target_chr].copy()
-    refphase_snps = refphase_snps[refphase_snps["chr"] == target_chr].copy()
+    if refphase_snps is not None and not refphase_snps.empty:
+        refphase_snps = refphase_snps[refphase_snps["chr"] == target_chr].copy()
+    if precomputed_ci_table is not None and "segment" in precomputed_ci_table.columns:
+        precomputed_ci_table = precomputed_ci_table[
+            precomputed_ci_table["segment"].str.startswith(f"{target_chr}_")
+        ].copy()
     if refphase_segments.empty:
         raise ValueError(
             f"No segment rows remain after --chromosome filter ({chromosome})."
         )
-    if refphase_snps.empty:
+    if copy_number_tool != "battenberg_plus" and refphase_snps.empty:
         raise ValueError(
             f"No SNP rows remain after --chromosome filter ({chromosome})."
         )
@@ -224,108 +277,151 @@ refphase_segments["segment"] = (
 # use this to use number of heterozygous SNPs in each sample:
 if copy_number_tool == "refphase":
     refphase_segments = refphase_segments.groupby("segment").filter(
-        lambda x: (x["heterozygous_SNP_number"] >= args.heterozygous_SNPs_threshold).all()
+        lambda x: (
+            x["heterozygous_SNP_number"] >= args.heterozygous_SNPs_threshold
+        ).all()
     )
-else:
+elif copy_number_tool == "battenberg":
     # Battenberg segments are sample-specific; thresholding should be applied per-row.
     refphase_segments = refphase_segments[
         refphase_segments["heterozygous_SNP_number"] >= args.heterozygous_SNPs_threshold
     ]
+# battenberg_plus provides precomputed confidence intervals, so do not apply
+# heterozygous_SNPs_threshold filtering here.
 # NB: if segments with 0 SNPs are kept, the copy number for such segments will not be recalculated with calculate_confidence_intervals
 # and confidence interval values will be set to equal the input copy number values.
 
-# calculate confidence intervals:
-print(f"Calculating confidence intervals for {tumour_id}")
-# assign SNPS to segments:
-snps_with_segments = refphase_snps.merge(
-    refphase_segments,
-    left_on=["sample", "chr"],
-    right_on=["sample", "chr"],
-    how="inner",
-)
+if copy_number_tool == "battenberg_plus":
+    print(f"Using precomputed phased confidence intervals for {tumour_id}")
+    required_ci_cols = {
+        "segment",
+        "sample",
+        "cpnA",
+        "cpnB",
+        "lower_CI_A",
+        "upper_CI_A",
+        "lower_CI_B",
+        "upper_CI_B",
+    }
+    missing_ci_cols = required_ci_cols.difference(set(precomputed_ci_table.columns))
+    if missing_ci_cols:
+        raise ValueError(
+            "precomputed_ci_table is missing required columns: "
+            + ", ".join(sorted(missing_ci_cols))
+        )
 
-snps_with_segments = snps_with_segments[
-    (snps_with_segments["pos"] >= snps_with_segments["start"])
-    & (snps_with_segments["pos"] <= snps_with_segments["end"])
-]
-# add purity and ploidy information
-snps_with_segments_purity_ploidy = snps_with_segments.merge(
-    refphase_purity_ploidy, left_on="sample", right_on="sample_id", how="inner"
-)
-
-# estimate the confidence intervals:
-confidence_intervals = (
-    snps_with_segments_purity_ploidy.groupby(["segment", "sample"])
-    .apply(
-        calculate_confidence_intervals,
-        ci_value=ci_value,
-        n_bootstrap=n_bootstrap,
-        recalculate_not_updated_cns=recalculate_not_updated_cns,
-        recalculate_updated_cns=recalculate_updated_cns,
-        recalculate_reference_cns=recalculate_reference_cns,
+    confidence_intervals = precomputed_ci_table[
+        [
+            "segment",
+            "sample",
+            "cpnA",
+            "cpnB",
+            "lower_CI_A",
+            "upper_CI_A",
+            "lower_CI_B",
+            "upper_CI_B",
+        ]
+    ].copy()
+    covered_segments = set(confidence_intervals["segment"].unique())
+else:
+    # calculate confidence intervals:
+    print(f"Calculating confidence intervals for {tumour_id}")
+    # assign SNPS to segments:
+    snps_with_segments = refphase_snps.merge(
+        refphase_segments,
+        left_on=["sample", "chr"],
+        right_on=["sample", "chr"],
+        how="inner",
     )
-    .reset_index()
-    .drop(columns=["level_2"])
-)
-# add 0 SNP segments if such segments not filtereted out, i.e when args.heterozygous_SNPs_threshold=0
-if args.heterozygous_SNPs_threshold == 0:
-    # add 0 SNP segments if such segments not filtereted out, i.e when args.heterozygous_SNPs_threshold=0
-    # for such segments, we set confidence intervals to 0.5 to reflect low certainty
-    CI_span = 0.5
-    zero_snp_segments = refphase_segments[
-        refphase_segments.heterozygous_SNP_number == 0
+
+    snps_with_segments = snps_with_segments[
+        (snps_with_segments["pos"] >= snps_with_segments["start"])
+        & (snps_with_segments["pos"] <= snps_with_segments["end"])
     ]
-    zero_snp_segments = zero_snp_segments[["segment", "sample", "cn_a", "cn_b"]]
-    CI_half = CI_span / 2.0
-    zero_snp_segments["lower_CI_A"] = (zero_snp_segments["cn_a"] - CI_half).clip(
-        lower=0
-    )
-    zero_snp_segments["upper_CI_A"] = zero_snp_segments["cn_a"] + CI_half
-    zero_snp_segments["lower_CI_B"] = (zero_snp_segments["cn_b"] - CI_half).clip(
-        lower=0
-    )
-    zero_snp_segments["upper_CI_B"] = zero_snp_segments["cn_b"] + CI_half
-    zero_snp_segments.rename(columns={"cn_a": "cpnA", "cn_b": "cpnB"}, inplace=True)
-    confidence_intervals = pd.concat(
-        [confidence_intervals, zero_snp_segments], ignore_index=True
-    )
-confidence_intervals["chr"] = confidence_intervals["segment"].apply(
-    lambda x: int(x.split("_")[0])
-)
-confidence_intervals["start"] = confidence_intervals["segment"].apply(
-    lambda x: int(x.split("_")[1])
-)
-LOW_SNP_THRESHOLD = 10
-# we don't trust confidence intervals for segments with very low number of heterozygous SNPs, 
-# ensure such segments have confidence intervals of at least 0.5 (i.e. +/- 0.25 around the original copy number value):
-low_snp_ci_span = 0.5
-low_snp_ci_half = low_snp_ci_span / 2.0
-low_snp_segments = pd.MultiIndex.from_frame(
-    refphase_segments.loc[
-        refphase_segments["heterozygous_SNP_number"] <= LOW_SNP_THRESHOLD, ["segment", "sample"]
-    ].drop_duplicates()
-)
-if len(low_snp_segments) > 0:
-    low_snp_mask = pd.MultiIndex.from_frame(
-        confidence_intervals[["segment", "sample"]]
-    ).isin(low_snp_segments)
-    confidence_intervals.loc[low_snp_mask, "lower_CI_A"] = (
-        confidence_intervals.loc[low_snp_mask, "cpnA"] - low_snp_ci_half
-    ).clip(lower=0)
-    confidence_intervals.loc[low_snp_mask, "upper_CI_A"] = (
-        confidence_intervals.loc[low_snp_mask, "cpnA"] + low_snp_ci_half
-    )
-    confidence_intervals.loc[low_snp_mask, "lower_CI_B"] = (
-        confidence_intervals.loc[low_snp_mask, "cpnB"] - low_snp_ci_half
-    ).clip(lower=0)
-    confidence_intervals.loc[low_snp_mask, "upper_CI_B"] = (
-        confidence_intervals.loc[low_snp_mask, "cpnB"] + low_snp_ci_half
+    # add purity and ploidy information
+    snps_with_segments_purity_ploidy = snps_with_segments.merge(
+        refphase_purity_ploidy, left_on="sample", right_on="sample_id", how="inner"
     )
 
-confidence_intervals = confidence_intervals.sort_values(by=["sample", "chr", "start"])
-confidence_intervals.drop(columns=["chr", "start"], inplace=True)
-if copy_number_tool == "battenberg" and BATTENBERG_RECALIBRATE_CI:    
-    confidence_intervals = calibrate_battenberg_cns_and_cis(confidence_intervals, refphase_segments)
+    # estimate the confidence intervals:
+    confidence_intervals = (
+        snps_with_segments_purity_ploidy.groupby(["segment", "sample"])
+        .apply(
+            calculate_confidence_intervals,
+            ci_value=ci_value,
+            n_bootstrap=n_bootstrap,
+            recalculate_not_updated_cns=recalculate_not_updated_cns,
+            recalculate_updated_cns=recalculate_updated_cns,
+            recalculate_reference_cns=recalculate_reference_cns,
+        )
+        .reset_index()
+        .drop(columns=["level_2"])
+    )
+    # add 0 SNP segments if such segments not filtereted out, i.e when args.heterozygous_SNPs_threshold=0
+    if args.heterozygous_SNPs_threshold == 0:
+        # add 0 SNP segments if such segments not filtereted out, i.e when args.heterozygous_SNPs_threshold=0
+        # for such segments, we set confidence intervals to 0.5 to reflect low certainty
+        CI_span = 0.5
+        zero_snp_segments = refphase_segments[
+            refphase_segments.heterozygous_SNP_number == 0
+        ]
+        zero_snp_segments = zero_snp_segments[["segment", "sample", "cn_a", "cn_b"]]
+        CI_half = CI_span / 2.0
+        zero_snp_segments["lower_CI_A"] = (zero_snp_segments["cn_a"] - CI_half).clip(
+            lower=0
+        )
+        zero_snp_segments["upper_CI_A"] = zero_snp_segments["cn_a"] + CI_half
+        zero_snp_segments["lower_CI_B"] = (zero_snp_segments["cn_b"] - CI_half).clip(
+            lower=0
+        )
+        zero_snp_segments["upper_CI_B"] = zero_snp_segments["cn_b"] + CI_half
+        zero_snp_segments.rename(columns={"cn_a": "cpnA", "cn_b": "cpnB"}, inplace=True)
+        confidence_intervals = pd.concat(
+            [confidence_intervals, zero_snp_segments], ignore_index=True
+        )
+    confidence_intervals["chr"] = confidence_intervals["segment"].apply(
+        lambda x: int(x.split("_")[0])
+    )
+    confidence_intervals["start"] = confidence_intervals["segment"].apply(
+        lambda x: int(x.split("_")[1])
+    )
+    LOW_SNP_THRESHOLD = 10
+    # we don't trust confidence intervals for segments with very low number of heterozygous SNPs,
+    # ensure such segments have confidence intervals of at least 0.5 (i.e. +/- 0.25 around the original copy number value):
+    low_snp_ci_span = 0.5
+    low_snp_ci_half = low_snp_ci_span / 2.0
+    low_snp_segments = pd.MultiIndex.from_frame(
+        refphase_segments.loc[
+            refphase_segments["heterozygous_SNP_number"] <= LOW_SNP_THRESHOLD,
+            ["segment", "sample"],
+        ].drop_duplicates()
+    )
+    if len(low_snp_segments) > 0:
+        low_snp_mask = pd.MultiIndex.from_frame(
+            confidence_intervals[["segment", "sample"]]
+        ).isin(low_snp_segments)
+        confidence_intervals.loc[low_snp_mask, "lower_CI_A"] = (
+            confidence_intervals.loc[low_snp_mask, "cpnA"] - low_snp_ci_half
+        ).clip(lower=0)
+        confidence_intervals.loc[low_snp_mask, "upper_CI_A"] = (
+            confidence_intervals.loc[low_snp_mask, "cpnA"] + low_snp_ci_half
+        )
+        confidence_intervals.loc[low_snp_mask, "lower_CI_B"] = (
+            confidence_intervals.loc[low_snp_mask, "cpnB"] - low_snp_ci_half
+        ).clip(lower=0)
+        confidence_intervals.loc[low_snp_mask, "upper_CI_B"] = (
+            confidence_intervals.loc[low_snp_mask, "cpnB"] + low_snp_ci_half
+        )
+
+    confidence_intervals = confidence_intervals.sort_values(
+        by=["sample", "chr", "start"]
+    )
+    confidence_intervals.drop(columns=["chr", "start"], inplace=True)
+    if copy_number_tool == "battenberg" and BATTENBERG_RECALIBRATE_CI:
+        confidence_intervals = calibrate_battenberg_cns_and_cis(
+            confidence_intervals, refphase_segments
+        )
+    covered_segments = set(snps_with_segments_purity_ploidy["segment"].unique())
 
 ci_table = confidence_intervals.merge(refphase_segments)[
     [
@@ -340,11 +436,7 @@ ci_table = confidence_intervals.merge(refphase_segments)[
         "lower_CI_B",
         "upper_CI_B",
         "was_cn_updated",
-        *(
-            ["is_clonal"]
-            if "is_clonal" in refphase_segments.columns
-            else []
-        ),
+        *(["is_clonal"] if "is_clonal" in refphase_segments.columns else []),
     ]
 ].drop_duplicates()
 
@@ -358,17 +450,16 @@ for allele in ["A", "B"]:
         ci_table[f"cpn{allele}"] <= ci_table[f"upper_CI_{allele}"]
     ), f"cpn{allele} <= upper_CI_{allele}"
 
-# Segments absent from phased_snps.tsv have no SNP data and cannot have CIs
-# computed — they are legitimately excluded. Only assert on SNP-covered segments.
-snp_covered_segments = set(snps_with_segments_purity_ploidy["segment"].unique())
 output_segments = set(ci_table["segment"].unique())
-missing_segments = snp_covered_segments - output_segments
+missing_segments = covered_segments - output_segments
 assert (
     len(missing_segments) == 0
 ), f"Some input segments are missing in the output: {missing_segments}"
-uncovered_count = len(set(refphase_segments["segment"].unique()) - snp_covered_segments)
-if uncovered_count > 0:
-    print(f"Warning: {uncovered_count} segment(s) had no SNPs in phased_snps.tsv and were excluded from ci_table")
+uncovered_count = len(set(refphase_segments["segment"].unique()) - covered_segments)
+if copy_number_tool != "battenberg_plus" and uncovered_count > 0:
+    print(
+        f"Warning: {uncovered_count} segment(s) had no SNPs in phased_snps.tsv and were excluded from ci_table"
+    )
 
 # keep only samples present in CONIPHER cp_table:
 ci_table = ci_table[ci_table["sample"].isin(conipher_samples)]

@@ -303,7 +303,7 @@ You can pass these options to the `alpaca input-conversion` helper (they are for
 You can choose the copy-number source tool:
 
 ```bash
---copy_number_tool <refphase|battenberg> # (optional, default=refphase)
+--copy_number_tool <refphase|battenberg|battenberg_plus> # (optional, default=refphase)
 ```
 
 For Battenberg input, use either an inventory file (recommended) or directory discovery:
@@ -320,6 +320,24 @@ Required columns:
 `logr_segmented_path`, `mutant_logr_path`, `heterozygous_baf_path` (or `baf_segmented_path`), `purity_ploidy_path`.
 Optional columns:
 `sample` (or `sample_name`) and `tumour_id` (or `tumor_id` / `case_id`).
+
+For battenberg_plus input, provide a phased fractional copy-number table and unphased CI files:
+
+```bash
+--copy_number_tool battenberg_plus
+--battenberg_plus_fractional_copy_number <path>   # required
+# and one of
+--battenberg_plus_ci_file <path>                  # repeat for each CI file
+# or
+--battenberg_plus_ci_dir <path>                   # directory with one CI file per sample
+```
+
+Expected battenberg_plus file columns:
+
+- fractional copy-number table: `SAMPLE`, `CHR`, `STARTPOS`, `ENDPOS`, `COPY_NUMBER_A`, `COPY_NUMBER_B`
+- per-sample CI table: `chr`, `startpos`, `endpos`, `nMajor`, `nMinor`, `nMajor_ci_lower`, `nMajor_ci_upper`, `nMinor_ci_lower`, `nMinor_ci_upper`
+
+The conversion step concatenates per-sample CI files, matches rows to phased fractional copy numbers by sample and segment, and phases copy numbers and CI bounds by flipping major/minor values where needed.
 
 You can use a single inventory file for multiple tumours. If a tumour column exists, rows are filtered to the `--tumour_id` provided to `alpaca input-conversion`.
 

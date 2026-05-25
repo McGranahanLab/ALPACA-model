@@ -13,6 +13,7 @@ updated with ``--update-golden``.
 import shutil
 import subprocess
 import sys
+import json
 
 import pandas as pd
 import pytest
@@ -20,6 +21,7 @@ import pytest
 from golden_utils import VOLATILE_COLS, assert_csv_matches_golden
 
 TUMOUR_ID = "LTX0000-Tumour1"
+BATTENBERG_PLUS_TUMOUR_ID = "LTX0001"
 
 _RSCRIPT_MISSING = shutil.which("Rscript") is None
 _SKIP_R = pytest.mark.skipif(_RSCRIPT_MISSING, reason="Rscript not on PATH")
@@ -49,11 +51,16 @@ def test_input_conversion(tmp_path, repo_root, run_alpaca, update_golden):
 
     run_alpaca(
         "input-conversion",
-        "--tumour_id", TUMOUR_ID,
-        "--refphase_rData", str(refphase_rdata),
-        "--CONIPHER_tree_object", str(conipher_tree),
-        "--CONIPHER_tree_index", "1",
-        "--output_dir", str(tmp_path),
+        "--tumour_id",
+        TUMOUR_ID,
+        "--refphase_rData",
+        str(refphase_rdata),
+        "--CONIPHER_tree_object",
+        str(conipher_tree),
+        "--CONIPHER_tree_index",
+        "1",
+        "--output_dir",
+        str(tmp_path),
     )
 
     for expected_file in ("ALPACA_input_table.csv", "ci_table.csv", "cp_table.csv"):
@@ -72,6 +79,86 @@ def test_input_conversion(tmp_path, repo_root, run_alpaca, update_golden):
 @pytest.mark.integration
 @pytest.mark.requires_r
 @_SKIP_R
+def test_input_conversion_battenberg_plus(
+    tmp_path, repo_root, run_alpaca, update_golden
+):
+    """Full CONIPHER + battenberg_plus -> ALPACA format conversion."""
+    input_dir = repo_root / "tests" / "convert_battenberg_plus"
+    conipher_tree = input_dir / f"{BATTENBERG_PLUS_TUMOUR_ID}.tree.RDS"
+    fractional_copy_number = input_dir / "copy_numbers.tsv"
+    ci_files = sorted(input_dir.glob("*extended*.txt.gz"))
+    assert ci_files, "No battenberg_plus CI files found for test input"
+
+    args = [
+        "input-conversion",
+        "--tumour_id",
+        BATTENBERG_PLUS_TUMOUR_ID,
+        "--copy_number_tool",
+        "battenberg_plus",
+        "--battenberg_plus_fractional_copy_number",
+        str(fractional_copy_number),
+    ]
+    for ci_file in ci_files:
+        args.extend(["--battenberg_plus_ci_file", str(ci_file)])
+    args.extend(
+        [
+            "--CONIPHER_tree_object",
+            str(conipher_tree),
+            "--output_dir",
+            str(tmp_path),
+        ]
+    )
+
+    run_alpaca(*args)
+
+    for expected_file in (
+        "ALPACA_input_table.csv",
+        "ci_table.csv",
+        "cp_table.csv",
+        "tree_paths.json",
+    ):
+        assert (tmp_path / expected_file).exists(), f"Missing output: {expected_file}"
+
+    alpaca_input = pd.read_csv(tmp_path / "ALPACA_input_table.csv")
+    ci_table = pd.read_csv(tmp_path / "ci_table.csv")
+    cp_table = pd.read_csv(tmp_path / "cp_table.csv", index_col="clone")
+
+    cp_samples = set(cp_table.columns.astype(str))
+    ci_samples = set(ci_table["sample"].astype(str))
+    alpaca_samples = set(alpaca_input["sample"].astype(str))
+
+    assert cp_samples == ci_samples == alpaca_samples, (
+        "Sample mismatch across conversion outputs: "
+        f"cp={sorted(cp_samples)}, ci={sorted(ci_samples)}, alpaca={sorted(alpaca_samples)}"
+    )
+
+    assert len(ci_table) > 0, "ci_table.csv is empty"
+    assert len(alpaca_input) > 0, "ALPACA_input_table.csv is empty"
+
+    golden_dir = _golden(repo_root, "convert_battenberg_plus")
+    for csv_name in ("ALPACA_input_table.csv", "ci_table.csv", "cp_table.csv"):
+        assert_csv_matches_golden(
+            tmp_path / csv_name,
+            golden_dir / csv_name,
+            ignore_cols=VOLATILE_COLS,
+            update=update_golden,
+        )
+
+    expected_tree_paths = golden_dir / "tree_paths.json"
+    if update_golden:
+        shutil.copyfile(tmp_path / "tree_paths.json", expected_tree_paths)
+
+    assert expected_tree_paths.exists(), "Missing golden output: tree_paths.json"
+    with (tmp_path / "tree_paths.json").open("r", encoding="utf-8") as produced_handle:
+        produced_tree_paths = json.load(produced_handle)
+    with expected_tree_paths.open("r", encoding="utf-8") as expected_handle:
+        expected_tree_paths_json = json.load(expected_handle)
+    assert produced_tree_paths == expected_tree_paths_json
+
+
+@pytest.mark.integration
+@pytest.mark.requires_r
+@_SKIP_R
 def test_input_conversion_missing_samples(tmp_path, repo_root):
     """When CONIPHER cp_table lists a sample not present in RefPhase output,
     ci_table samples should be a strict subset of cp_table samples."""
@@ -82,17 +169,29 @@ def test_input_conversion_missing_samples(tmp_path, repo_root):
     # Step 1: extract RefPhase RData → TSVs
     extract_script = script_dir / "extract_rephase_data.py"
     result = subprocess.run(
-        [sys.executable, str(extract_script),
-         "--refphase_rData", str(refphase_rdata),
-         "--output_dir", str(tmp_path)],
-        capture_output=True, text=True, cwd=repo_root,
+        [
+            sys.executable,
+            str(extract_script),
+            "--refphase_rData",
+            str(refphase_rdata),
+            "--output_dir",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
     )
     assert result.returncode == 0, result.stderr
 
     # Step 2: build a cp_table with one extra sample absent from RefPhase,
     # simulating CONIPHER knowing about a sample that RefPhase lacks.
     base_cp = pd.read_csv(
-        repo_root / "examples" / "example_cohort" / "input" / TUMOUR_ID / "cp_table.csv",
+        repo_root
+        / "examples"
+        / "example_cohort"
+        / "input"
+        / TUMOUR_ID
+        / "cp_table.csv",
         index_col="clone",
     )
     base_cp["CONIPHER_EXTRA_SAMPLE"] = 0.0
@@ -102,14 +201,25 @@ def test_input_conversion_missing_samples(tmp_path, repo_root):
     # Step 3: convert TSVs to ALPACA ci_table using the inflated cp_table
     convert_script = script_dir / "convert_refphase.py"
     result = subprocess.run(
-        [sys.executable, str(convert_script),
-         "--tumour_id", TUMOUR_ID,
-         "--output_dir", str(tmp_path),
-         "--refphase_segments", str(tmp_path / "phased_segs.tsv"),
-         "--refphase_snps", str(tmp_path / "phased_snps.tsv"),
-         "--refphase_purity_ploidy", str(tmp_path / "purity_ploidy.tsv"),
-         "--conipher_cp_table", str(cp_table_path)],
-        capture_output=True, text=True, cwd=repo_root,
+        [
+            sys.executable,
+            str(convert_script),
+            "--tumour_id",
+            TUMOUR_ID,
+            "--output_dir",
+            str(tmp_path),
+            "--refphase_segments",
+            str(tmp_path / "phased_segs.tsv"),
+            "--refphase_snps",
+            str(tmp_path / "phased_snps.tsv"),
+            "--refphase_purity_ploidy",
+            str(tmp_path / "purity_ploidy.tsv"),
+            "--conipher_cp_table",
+            str(cp_table_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
     )
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "ci_table.csv").exists()
@@ -138,14 +248,25 @@ def test_convert_conipher(tmp_path, repo_root):
         / "convert_conipher_output.py"
     )
     conipher_tree = (
-        repo_root / "examples" / "example_cohort" / "input" / TUMOUR_ID
+        repo_root
+        / "examples"
+        / "example_cohort"
+        / "input"
+        / TUMOUR_ID
         / f"{TUMOUR_ID}.tree.RDS"
     )
     result = subprocess.run(
-        [sys.executable, str(script),
-         "--CONIPHER_tree_object", str(conipher_tree),
-         "--output_dir", str(tmp_path)],
-        capture_output=True, text=True, cwd=repo_root,
+        [
+            sys.executable,
+            str(script),
+            "--CONIPHER_tree_object",
+            str(conipher_tree),
+            "--output_dir",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
     )
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "tree_paths.json").exists()
@@ -163,10 +284,17 @@ def test_extract_and_convert_refphase(tmp_path, repo_root, update_golden):
     # Step 1: extract RData to TSVs
     extract_script = script_dir / "extract_rephase_data.py"
     result = subprocess.run(
-        [sys.executable, str(extract_script),
-         "--refphase_rData", str(refphase_rdata),
-         "--output_dir", str(tmp_path)],
-        capture_output=True, text=True, cwd=repo_root,
+        [
+            sys.executable,
+            str(extract_script),
+            "--refphase_rData",
+            str(refphase_rdata),
+            "--output_dir",
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
     )
     assert result.returncode == 0, result.stderr
     for tsv in ("phased_segs.tsv", "phased_snps.tsv", "purity_ploidy.tsv"):
@@ -176,14 +304,25 @@ def test_extract_and_convert_refphase(tmp_path, repo_root, update_golden):
     conipher_cp_table = example_input / "cp_table.csv"
     convert_script = script_dir / "convert_refphase.py"
     result = subprocess.run(
-        [sys.executable, str(convert_script),
-         "--tumour_id", TUMOUR_ID,
-         "--output_dir", str(tmp_path),
-         "--refphase_segments", str(tmp_path / "phased_segs.tsv"),
-         "--refphase_snps", str(tmp_path / "phased_snps.tsv"),
-         "--refphase_purity_ploidy", str(tmp_path / "purity_ploidy.tsv"),
-         "--conipher_cp_table", str(conipher_cp_table)],
-        capture_output=True, text=True, cwd=repo_root,
+        [
+            sys.executable,
+            str(convert_script),
+            "--tumour_id",
+            TUMOUR_ID,
+            "--output_dir",
+            str(tmp_path),
+            "--refphase_segments",
+            str(tmp_path / "phased_segs.tsv"),
+            "--refphase_snps",
+            str(tmp_path / "phased_snps.tsv"),
+            "--refphase_purity_ploidy",
+            str(tmp_path / "purity_ploidy.tsv"),
+            "--conipher_cp_table",
+            str(conipher_cp_table),
+        ],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
     )
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "ci_table.csv").exists()
@@ -205,7 +344,9 @@ def test_convert_ascat(tmp_path, repo_root, update_golden):
 
     Skipped if the test dataset (in dev/, which is gitignored) is absent.
     """
-    ascat_rdata = repo_root / "dev" / "ASCAT_test_data" / "patient_1" / "ASCAT_objects.Rdata"
+    ascat_rdata = (
+        repo_root / "dev" / "ASCAT_test_data" / "patient_1" / "ASCAT_objects.Rdata"
+    )
     if not ascat_rdata.exists():
         pytest.skip(f"ASCAT test dataset not found: {ascat_rdata}")
 
@@ -214,26 +355,46 @@ def test_convert_ascat(tmp_path, repo_root, update_golden):
     # Step 1: unpack RData → TSVs using R helper
     r_helper = script_dir / "unpack_RDS_ascat_helper.R"
     result = subprocess.run(
-        ["Rscript", str(r_helper),
-         "--rdata", str(ascat_rdata),
-         "--output_dir", str(tmp_path),
-         "--out_prefix", TUMOUR_ID],
-        capture_output=True, text=True, cwd=repo_root,
+        [
+            "Rscript",
+            str(r_helper),
+            "--rdata",
+            str(ascat_rdata),
+            "--output_dir",
+            str(tmp_path),
+            "--out_prefix",
+            TUMOUR_ID,
+        ],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
     )
     assert result.returncode == 0, result.stderr
 
     # Step 2: convert TSVs → ALPACA format
     convert_script = script_dir / "convert_ascat_output.py"
     result = subprocess.run(
-        [sys.executable, str(convert_script),
-         "--tumour_id", TUMOUR_ID,
-         "--output_dir", str(tmp_path),
-         "--segments", str(tmp_path / f"{TUMOUR_ID}_segments.tsv"),
-         "--snps", str(tmp_path / f"{TUMOUR_ID}_snps.tsv"),
-         "--purity_ploidy", str(tmp_path / f"{TUMOUR_ID}_purity_ploidy.tsv"),
-         "--n_boot", "10",
-         "--gamma", "1"],
-        capture_output=True, text=True, cwd=repo_root,
+        [
+            sys.executable,
+            str(convert_script),
+            "--tumour_id",
+            TUMOUR_ID,
+            "--output_dir",
+            str(tmp_path),
+            "--segments",
+            str(tmp_path / f"{TUMOUR_ID}_segments.tsv"),
+            "--snps",
+            str(tmp_path / f"{TUMOUR_ID}_snps.tsv"),
+            "--purity_ploidy",
+            str(tmp_path / f"{TUMOUR_ID}_purity_ploidy.tsv"),
+            "--n_boot",
+            "10",
+            "--gamma",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=repo_root,
     )
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "ALPACA_input_table.csv").exists()
