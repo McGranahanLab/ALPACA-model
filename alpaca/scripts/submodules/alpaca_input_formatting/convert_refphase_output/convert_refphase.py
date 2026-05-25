@@ -6,6 +6,7 @@ from functions import (
     calculate_confidence_intervals,
     get_consensus_segmentation,
     calibrate_battenberg_cns_and_cis,
+    normalise_confidence_intervals
 )
 
 # arguments
@@ -441,6 +442,9 @@ ci_table = confidence_intervals.merge(refphase_segments)[
 ].drop_duplicates()
 
 ci_table["tumour_id"] = tumour_id
+
+if copy_number_tool == "battenberg_plus":
+    ci_table = normalise_confidence_intervals(ci_table)
 ci_table["ci_value"] = ci_value
 for allele in ["A", "B"]:
     assert all(
