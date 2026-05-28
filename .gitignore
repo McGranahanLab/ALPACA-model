@@ -17,5 +17,4 @@ examples/**/*.json
 examples/**/*.ipynb
 *.log
 tests/compare_solvers/output*
-tests/convert_battenberg_plus
-tests/convert_battenberg_plus_full_data
+tests/archive

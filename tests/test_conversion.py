@@ -21,7 +21,7 @@ import pytest
 from golden_utils import VOLATILE_COLS, assert_csv_matches_golden
 
 TUMOUR_ID = "LTX0000-Tumour1"
-BATTENBERG_PLUS_TUMOUR_ID = "LTX0001"
+BATTENBERG_PLUS_TUMOUR_ID = "LTX000"
 
 _RSCRIPT_MISSING = shutil.which("Rscript") is None
 _SKIP_R = pytest.mark.skipif(_RSCRIPT_MISSING, reason="Rscript not on PATH")
