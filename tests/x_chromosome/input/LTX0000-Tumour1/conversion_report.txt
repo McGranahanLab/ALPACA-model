@@ -1,6 +1,6 @@
 Conversion report
 =================
-Date: 2026-05-22T15:02:42Z
+Date: 2026-05-28T15:22:23Z
 Script: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/alpaca/scripts/submodules/alpaca_input_formatting/convert_refphase_output/convert_refphase.py
 
 Arguments and values:
@@ -10,6 +10,9 @@ Arguments and values:
     refphase_rData: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/tests/x_chromosome/input/LTX0000-Tumour1/LTX0000-Tumour1-refphase-results.RData
     battenberg_inventory: 
     battenberg_input_dir: 
+    battenberg_plus_fractional_copy_number: 
+    battenberg_plus_ci_file_count: 0
+    battenberg_plus_ci_dir: 
     CONIPHER_tree_object: /Users/piotrpawlik/Documents/GitHub/ALPACA-model/tests/x_chromosome/input/LTX0000-Tumour1/LTX0000-Tumour1.tree.RDS
     CONIPHER_tree_index: 1
     heterozygous_SNPs_threshold: 5
