@@ -15,15 +15,18 @@ fi
 # default arguments
 
 usage() {
-    echo "Usage: $0 --tumour_id TUMOUR_ID --CONIPHER_tree_object TREE_OBJECT_PATH --output_dir OUTPUT_DIR [--copy_number_tool refphase|battenberg] [...]"
+    echo "Usage: $0 --tumour_id TUMOUR_ID --CONIPHER_tree_object TREE_OBJECT_PATH --output_dir OUTPUT_DIR [--copy_number_tool refphase|battenberg|battenberg_plus] [...]"
     echo
     echo "Arguments:"
     echo "  --tumour_id              Tumour ID (required)"
-    echo "  --copy_number_tool       Copy number source tool: refphase|battenberg (optional, default: refphase)"
+    echo "  --copy_number_tool       Copy number source tool: refphase|battenberg|battenberg_plus (optional, default: refphase)"
     echo "  --chromosome             Optional chromosome filter (e.g. 1, chr1, X). If set, only this chromosome is processed."
     echo "  --refphase_rData         Path to refphase .RData file (required when --copy_number_tool refphase)"
     echo "  --battenberg_inventory   Path to Battenberg inventory file (recommended for --copy_number_tool battenberg)"
     echo "  --battenberg_input_dir   Path to Battenberg directory for auto-discovery (optional for --copy_number_tool battenberg)"
+    echo "  --battenberg_plus_fractional_copy_number  Path to phased fractional copy-number table (required for --copy_number_tool battenberg_plus)"
+    echo "  --battenberg_plus_ci_file  Path to a battenberg_plus CI file (repeat option for multiple files)"
+    echo "  --battenberg_plus_ci_dir  Optional directory containing one battenberg_plus CI file per sample"
     echo "  --CONIPHER_tree_object   Path to CONIPHER tree object .RDS file (required)"
     echo "  --CONIPHER_tree_index    Selected CONIPHER tree index (optional, default: 1)"
     echo "  --heterozygous_SNPs_threshold  Optional int threshold passed to convert_refphase.py - default value is 5"
@@ -48,6 +51,9 @@ copy_number_tool="refphase"
 chromosome=""
 battenberg_inventory=""
 battenberg_input_dir=""
+battenberg_plus_fractional_copy_number=""
+battenberg_plus_ci_files=()
+battenberg_plus_ci_dir=""
 # Parse named arguments
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -57,6 +63,9 @@ while [[ "$#" -gt 0 ]]; do
         --refphase_rData) refphase_rData="$2"; shift ;;
         --battenberg_inventory) battenberg_inventory="$2"; shift ;;
         --battenberg_input_dir) battenberg_input_dir="$2"; shift ;;
+        --battenberg_plus_fractional_copy_number) battenberg_plus_fractional_copy_number="$2"; shift ;;
+        --battenberg_plus_ci_file) battenberg_plus_ci_files+=("$2"); shift ;;
+        --battenberg_plus_ci_dir) battenberg_plus_ci_dir="$2"; shift ;;
         --CONIPHER_tree_object) CONIPHER_tree_object="$2"; shift ;;
         --CONIPHER_tree_index) CONIPHER_tree_index="$2"; shift ;;
         --heterozygous_SNPs_threshold) heterozygous_SNPs_threshold="$2"; shift ;;
@@ -73,8 +82,8 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 copy_number_tool="$(echo "${copy_number_tool}" | tr '[:upper:]' '[:lower:]')"
-if [[ "${copy_number_tool}" != "refphase" && "${copy_number_tool}" != "battenberg" ]]; then
-    echo "Error: --copy_number_tool must be one of: refphase, battenberg" >&2
+if [[ "${copy_number_tool}" != "refphase" && "${copy_number_tool}" != "battenberg" && "${copy_number_tool}" != "battenberg_plus" ]]; then
+    echo "Error: --copy_number_tool must be one of: refphase, battenberg, battenberg_plus" >&2
     usage
 fi
 
@@ -91,6 +100,16 @@ fi
 
 if [ "${copy_number_tool}" = "battenberg" ] && [ -z "${battenberg_inventory:-}" ] && [ -z "${battenberg_input_dir:-}" ]; then
     echo "Error: for --copy_number_tool battenberg, provide --battenberg_inventory and/or --battenberg_input_dir" >&2
+    usage
+fi
+
+if [ "${copy_number_tool}" = "battenberg_plus" ] && [ -z "${battenberg_plus_fractional_copy_number:-}" ]; then
+    echo "Error: --battenberg_plus_fractional_copy_number is required when --copy_number_tool battenberg_plus" >&2
+    usage
+fi
+
+if [ "${copy_number_tool}" = "battenberg_plus" ] && [ ${#battenberg_plus_ci_files[@]} -eq 0 ] && [ -z "${battenberg_plus_ci_dir:-}" ]; then
+    echo "Error: for --copy_number_tool battenberg_plus, provide one or more --battenberg_plus_ci_file and/or --battenberg_plus_ci_dir" >&2
     usage
 fi
 
@@ -130,7 +149,7 @@ if [ "${copy_number_tool}" = "refphase" ]; then
         echo "Python extract_rephase_data.py failed" >&2
         exit 1
     fi
-else
+elif [ "${copy_number_tool}" = "battenberg" ]; then
     echo "Extracting data from BATTENBERG output"
     battenberg_cmd=(
         python3 "${SCRIPT_DIR}/convert_battenberg_output/extract_battenberg_data.py"
@@ -151,6 +170,29 @@ else
         echo "Python extract_battenberg_data.py failed" >&2
         exit 1
     fi
+else
+    echo "Extracting data from BATTENBERG_PLUS output"
+    battenberg_plus_cmd=(
+        python3 "${SCRIPT_DIR}/convert_battenberg_plus_output/extract_battenberg_plus_data.py"
+        --tumour_id "$tumour_id"
+        --fractional_copy_number "$battenberg_plus_fractional_copy_number"
+        --output_dir "$output_dir"
+        --ci_value "$ci_value"
+    )
+    if [ -n "${chromosome:-}" ]; then
+        battenberg_plus_cmd+=(--chromosome "$chromosome")
+    fi
+    for ci_file in "${battenberg_plus_ci_files[@]}"; do
+        battenberg_plus_cmd+=(--battenberg_ci_file "$ci_file")
+    done
+    if [ -n "${battenberg_plus_ci_dir:-}" ]; then
+        battenberg_plus_cmd+=(--battenberg_ci_dir "$battenberg_plus_ci_dir")
+    fi
+    "${battenberg_plus_cmd[@]}"
+    if [ $? -ne 0 ]; then
+        echo "Python extract_battenberg_plus_data.py failed" >&2
+        exit 1
+    fi
 fi
 
 refphase_segments_path="${output_dir}/phased_segs.tsv"
@@ -158,12 +200,18 @@ refphase_snps_path="${output_dir}/phased_snps.tsv"
 refphase_purity_ploidy_path="${output_dir}/purity_ploidy.tsv"
 echo "===================================="
 echo "Extracting data from CONIPHER output"
-python3 "${SCRIPT_DIR}/convert_conipher_output/convert_conipher_output.py" \
-    --CONIPHER_tree_object $CONIPHER_tree_object \
-    --CONIPHER_tree_index $CONIPHER_tree_index \
-    --output_dir $output_dir
+conipher_cmd=(
+    Rscript "${SCRIPT_DIR}/convert_conipher_output/convert_conipher_output.R"
+    --CONIPHER_tree_object "$CONIPHER_tree_object"
+    --CONIPHER_tree_index "$CONIPHER_tree_index"
+    --output_dir "$output_dir"
+)
+if [ "${copy_number_tool}" = "battenberg_plus" ]; then
+    conipher_cmd+=(--sanitize_cp_table_names)
+fi
+"${conipher_cmd[@]}"
 if [ $? -ne 0 ]; then
-    echo "Python convert_conipher_output.py failed" >&2
+    echo "Rscript convert_conipher_output.R failed" >&2
     exit 1
 fi
 echo "===================================="
@@ -174,8 +222,6 @@ convert_cmd=(
     --output_dir "$output_dir"
     --copy_number_tool "$copy_number_tool"
     --refphase_segments "$refphase_segments_path"
-    --refphase_snps "$refphase_snps_path"
-    --refphase_purity_ploidy "$refphase_purity_ploidy_path"
     --conipher_cp_table "${output_dir}/cp_table.csv"
     --heterozygous_SNPs_threshold "${heterozygous_SNPs_threshold}"
     --ci_value "${ci_value}"
@@ -184,6 +230,14 @@ convert_cmd=(
     --recalculate_updated_cns "${recalculate_updated_cns}"
     --recalculate_reference_cns "${recalculate_reference_cns}"
 )
+if [ "${copy_number_tool}" = "battenberg_plus" ]; then
+    convert_cmd+=(--precomputed_ci_table "${output_dir}/precomputed_ci.tsv")
+else
+    convert_cmd+=(
+        --refphase_snps "$refphase_snps_path"
+        --refphase_purity_ploidy "$refphase_purity_ploidy_path"
+    )
+fi
 if [ -n "${chromosome:-}" ]; then
     convert_cmd+=(--chromosome "$chromosome")
 fi
@@ -217,6 +271,9 @@ Arguments and values:
     refphase_rData: ${refphase_rData:-}
     battenberg_inventory: ${battenberg_inventory:-}
     battenberg_input_dir: ${battenberg_input_dir:-}
+    battenberg_plus_fractional_copy_number: ${battenberg_plus_fractional_copy_number:-}
+    battenberg_plus_ci_file_count: ${#battenberg_plus_ci_files[@]}
+    battenberg_plus_ci_dir: ${battenberg_plus_ci_dir:-}
     CONIPHER_tree_object: ${CONIPHER_tree_object}
     CONIPHER_tree_index: ${CONIPHER_tree_index}
     heterozygous_SNPs_threshold: ${heterozygous_SNPs_threshold}

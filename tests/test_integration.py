@@ -14,7 +14,9 @@ defined in conftest.py.
 """
 
 import shutil
+from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -26,6 +28,26 @@ TUMOUR_ID = "LTX0000-Tumour1"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _normalise_cp_table(path: Path) -> None:
+    """Round cp_table to 2 dp, mock zero-proportion clones with seeded random values, rebalance columns to sum to 1."""
+    rng = np.random.default_rng(seed=0)
+    df = pd.read_csv(path, index_col="clone")
+    df = df.round(2)
+    zero_rows = df.index[(df == 0).all(axis=1)]
+    for clone in zero_rows:
+        df.loc[clone] = rng.uniform(0, 1, size=len(df.columns)).round(2)
+    # Proportional rescaling: divide each column by its sum, then fix rounding residual.
+    for col in df.columns:
+        col_sum = df[col].sum()
+        if col_sum > 0:
+            df[col] = (df[col] / col_sum).round(2)
+        diff = round(1.0 - df[col].sum(), 2)
+        if diff != 0:
+            df.loc[df[col].idxmax(), col] = round(df.loc[df[col].idxmax(), col] + diff, 2)
+    df.to_csv(path)
+
 
 _PYOMO_GLPK = ("--solver", "pyomo", "--pyomo_solver", "glpk", "--pyomo_solver_options")
 _PYOMO_SCIP = ("--solver", "pyomo", "--pyomo_solver", "scip", "--pyomo_solver_options", "seed=1 threads=1")
@@ -260,6 +282,7 @@ def test_x_chromosome(tmp_path, repo_root, run_alpaca, update_golden):
         "--CONIPHER_tree_object", str(conipher_tree),
         "--output_dir", str(input_dir),
     )
+    _normalise_cp_table(input_dir / "cp_table.csv")
 
     run_alpaca(
         "run",

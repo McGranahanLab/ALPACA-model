@@ -17,3 +17,4 @@ examples/**/*.json
 examples/**/*.ipynb
 *.log
 tests/compare_solvers/output*
+tests/archive

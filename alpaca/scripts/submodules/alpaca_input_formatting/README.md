@@ -55,3 +55,21 @@ Notes:
 - BAF values are read from the  `BAFseg` column (if present); for headerless files, the 3rd column fallback is used.
 - You can use a single inventory file for multiple tumours. If a `tumour_id` column exists, rows are filtered to the `--tumour_id` passed to `input_conversion.sh`.
 - If there is no tumour column, all rows are read and non-matching samples are removed later by intersection with CONIPHER sample names. This works, but using a tumour column is safer and faster.
+
+# battenberg_plus input format
+
+When `--copy_number_tool battenberg_plus` is used, pass:
+
+- `--battenberg_plus_fractional_copy_number`: combined phased copy-number table.
+- `--battenberg_plus_ci_file`: path to a battenberg_plus CI file (repeat this option for multiple files).
+- or `--battenberg_plus_ci_dir`: directory containing one CI file per sample.
+
+Required fractional copy-number columns:
+
+- `SAMPLE`, `CHR`, `STARTPOS`, `ENDPOS`, `COPY_NUMBER_A`, `COPY_NUMBER_B`
+
+Required per-sample battenberg_plus CI columns:
+
+- `chr`, `startpos`, `endpos`, `nMajor`, `nMinor`, `nMajor_ci_lower`, `nMajor_ci_upper`, `nMinor_ci_lower`, `nMinor_ci_upper`
+
+CI rows are concatenated, matched to the phased fractional copy-number table by sample and segment, and then phased by comparing `(nMajor, nMinor)` to `(COPY_NUMBER_A, COPY_NUMBER_B)` (or flipped order).

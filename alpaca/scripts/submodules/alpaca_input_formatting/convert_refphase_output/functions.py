@@ -27,6 +27,23 @@ def calculate_final_value_cn_tot(seg_sample_df, logr_shift=0, logr_scale=1):
     return final_value
 
 
+def normalise_confidence_intervals(ci_table):
+    # Ensure that:
+    # lower confidence interval is not negative
+    # upper confidence interval is always above the lower one. If they have both value of zero, add small epsilon
+    # no values are NaNs. If copy number for NaN values is zero, set confidence interval to [0, 0.001], otherwise throw an error.
+    ci_table["lower_CI_A"] = ci_table["lower_CI_A"].clip(lower=0)
+    ci_table["lower_CI_B"] = ci_table["lower_CI_B"].clip(lower=0)
+    ci_table["upper_CI_A"] = ci_table["upper_CI_A"].clip(lower=ci_table["lower_CI_A"] + 0.001)
+    ci_table["upper_CI_B"] = ci_table["upper_CI_B"].clip(lower=ci_table["lower_CI_B"] + 0.001)
+    for allele in ["A", "B"]:
+        ci_table.loc[ci_table[f"cpn{allele}"].isna(), f"lower_CI_{allele}"] = 0
+        ci_table.loc[ci_table[f"cpn{allele}"].isna(), f"upper_CI_{allele}"] = 0.001
+    if ci_table[["cpnA", "cpnB"]].isna().any().any():
+        raise ValueError("NaN values found in copy numbers. Please check the input files and confidence interval calculation logic.")
+    return ci_table
+
+
 def calculate_confidence_intervals_logr(seg_sample_df, ci_value, n_bootstrap):
     cn_tot = seg_sample_df["cn_a"] + seg_sample_df["cn_b"]
     assert len(cn_tot.unique()) == 1
