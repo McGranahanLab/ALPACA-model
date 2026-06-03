@@ -494,7 +494,8 @@ https://github.com/McGranahanLab/ALPACA-nextflow
 --time_limit <int>
 ```
 
-Time limit for single gurobi iteration, by defalt set to 60. For very complex cases, the iteration time might exceed 60 seconds, in which case the optimisation is stopped and current best solution is selected. Please not that ALPACA performs multiple iterations on each segment, this argument restricts time limit for single such iteration.
+Time limit for single solver iteration, by defalt set to 300. If you are using Pyomo backend (`-solver pyomo`) keep the default or increase it if you are getting results with high MIP gap values. Gurobi backend is significantly faster (`-solver gurobi`) and you might lower the time limit to 60 secoonds. The reasons to keep the time limit set at all, is the rare ultra complex cases, where solving and proving optimallity (reaching gap of 0%) might take a very long time. To find the best value for your needs, identify the most complex segment (highest number of clones, highest number of samples etc.) and run it with a few time_limit values. I will likely observe that incresing the limit beyond certain value does not impact the solution meaningfully. 
+ Please not that ALPACA performs multiple iterations on each segment, this argument restricts time limit for single such iteration, so max runtime of full iteration cycle on single segment is number_of_iterations * time_limit.
 
 ```bash
 --cpu <int>
