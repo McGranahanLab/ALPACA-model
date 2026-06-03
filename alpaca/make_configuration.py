@@ -140,7 +140,7 @@ def get_parser():
     )
     parser.add_argument(
         "--time_limit",
-        default=60,
+        default=300,
         type=int,
         help="Time limit in seconds for each model run",
     )
