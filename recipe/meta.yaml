@@ -46,6 +46,7 @@ test:
 about:
   home: https://github.com/McGranahanLab/ALPACA-model
   license: MIT
+  license_family: MIT
   license_file: LICENSE
   summary: "ALPACA - Allele-specific Phylogenetic Analysis of Copy-number Aberrations"
   description: |
@@ -66,3 +67,7 @@ about:
       mamba install r-base
       ```
       These are optional and used only for converting ASCAT and Conipher outputs.
+
+extra:
+  recipe-maintainers:
+    - wlippa
