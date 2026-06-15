@@ -162,12 +162,11 @@ def remove_small_clones(cp_table, tree):
     return cp_table
 
 
-def split_input_file_name(input_file_name: str):
+def split_input_file_name(input_file_name: str, df:pd.DataFrame):
     stripped_name = input_file_name.split("ALPACA_input_table_")[1]
     if stripped_name.count("_") != 3:
         # the segment file name is probably malformed. Try to read the values from the file:
         try:
-            df = pd.read_csv(input_file_name)
             tumour_id_all = df.tumour_id.unique()
             segment_all = df.segment.unique()
             assert len(tumour_id_all) == 1, "Multiple tumour ids found in the input file, cannot determine tumour id for this segment"
@@ -452,13 +451,13 @@ class SegmentSolution:
         for key, value in self.config["model_config"].items():
             setattr(self, key, value)
         self.input_file_name = input_file_name
-        self.tumour_id, self.segment = split_input_file_name(self.input_file_name)
         # define tumour input directory depending on the run environment:
         self.set_directories()
         # load fractional copy numbers:
         self.input_table = pd.read_csv(
             f"{self.segments_dir}/{input_file_name}"
         ).sort_values("sample")
+        self.tumour_id, self.segment = split_input_file_name(self.input_file_name, self.input_table)
         # load tree:
         self.tree = read_tree_json(f"{self.tumour_dir}/tree_paths.json")
         # load clone proportions:
