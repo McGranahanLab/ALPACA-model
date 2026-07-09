@@ -69,6 +69,39 @@ def _format_rgb(rgb_tuple):
     return f"rgb{tuple(int(channel) for channel in rgb_tuple)}"
 
 
+def _normalize_chr_label(value):
+    """Normalize chromosome labels to UCSC form used by chr tables.
+
+    Handles ALPACA segment conventions where sex chromosomes may be encoded as
+    23 (X) and 24 (Y), and accepts either raw tokens ("23") or UCSC-like
+    labels ("chr23", "chrX").
+    """
+
+    if pd.isna(value):
+        return np.nan
+
+    token = str(value).strip()
+    if not token:
+        return np.nan
+
+    if token.lower().startswith("chr"):
+        token = token[3:]
+
+    upper_token = token.upper()
+    if upper_token in {"X", "Y"}:
+        return f"chr{upper_token}"
+
+    if token == "23":
+        return "chrX"
+    if token == "24":
+        return "chrY"
+
+    if token.isdigit():
+        return f"chr{int(token)}"
+
+    return f"chr{token}"
+
+
 def build_copy_number_palette(max_state, palette_name=_DEFAULT_HEATMAP_PALETTE):
     """Generate a discrete palette mapping copy-number states to RGB tuples.
 
@@ -166,7 +199,7 @@ def prepare_driver_mutations(mutation_df, tumour_id, chr_table):
         driver_df["chr"] = (
             driver_df[chr_column]
             .astype(str)
-            .apply(lambda val: val if val.startswith("chr") else f"chr{val}")
+            .apply(_normalize_chr_label)
         )
         driver_df["abs_position"] = driver_df["chr"].map(chr_lookup) + driver_df[
             pos_column
@@ -203,7 +236,9 @@ def plot_heatmap_with_tree(
     # drop diploid:
     alpaca_output = alpaca_output[alpaca_output.clone != "diploid"]
     # add coords:
-    alpaca_output["chr"] = "chr" + alpaca_output.segment.str.split("_", expand=True)[0]
+    alpaca_output["chr"] = (
+        alpaca_output.segment.str.split("_", expand=True)[0].apply(_normalize_chr_label)
+    )
     alpaca_output["Start"] = alpaca_output.segment.str.split("_", expand=True)[
         1
     ].astype(int)
@@ -526,7 +561,7 @@ def plot_heatmap_with_tree(
             fig.update_xaxes(
                 tickmode="array",
                 tickvals=chr_len["cumsum"] - (chr_len["len"] / 2),
-                ticktext=[str(x) for x in list(range(1, 23))],
+                ticktext=chr_len["chr"].astype(str).str.replace("chr", "", regex=False),
                 showticklabels=True,
                 row=i + 1,
                 col=2,
@@ -582,7 +617,9 @@ def plot_cpn_per_clone(
     # drop diploid:
     alpaca_output = alpaca_output[alpaca_output.clone != "diploid"]
     # add coords:
-    alpaca_output["chr"] = "chr" + alpaca_output.segment.str.split("_", expand=True)[0]
+    alpaca_output["chr"] = (
+        alpaca_output.segment.str.split("_", expand=True)[0].apply(_normalize_chr_label)
+    )
     alpaca_output["Start"] = alpaca_output.segment.str.split("_", expand=True)[
         1
     ].astype(int)
@@ -1071,7 +1108,7 @@ def plot_cpn_per_clone(
             fig.update_xaxes(
                 tickmode="array",
                 tickvals=chr_len["cumsum"] - (chr_len["len"] / 2),
-                ticktext=[str(x) for x in list(range(1, 23))],
+                ticktext=chr_len["chr"].astype(str).str.replace("chr", "", regex=False),
                 showticklabels=True,
                 row=i + 1,
                 col=2,
@@ -1210,9 +1247,7 @@ def plot_sample_level_copy_numbers(
             "Segment column must be formatted as <chr>_<start>_<end>."
         )
 
-    df["chr"] = segment_parts[0].apply(
-        lambda value: value if str(value).startswith("chr") else f"chr{value}"
-    )
+    df["chr"] = segment_parts[0].apply(_normalize_chr_label)
     df["Start"] = pd.to_numeric(segment_parts[1], errors="coerce")
     df["End"] = pd.to_numeric(segment_parts[2], errors="coerce")
     df = df.dropna(subset=["Start", "End", "chr", cpn_col])
