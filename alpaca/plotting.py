@@ -102,6 +102,10 @@ def _normalize_chr_label(value):
     return f"chr{token}"
 
 
+def _lexical_section_key(section):
+    return tuple(str(item) for item in section)
+
+
 def build_copy_number_palette(max_state, palette_name=_DEFAULT_HEATMAP_PALETTE):
     """Generate a discrete palette mapping copy-number states to RGB tuples.
 
@@ -236,15 +240,10 @@ def plot_heatmap_with_tree(
     # drop diploid:
     alpaca_output = alpaca_output[alpaca_output.clone != "diploid"]
     # add coords:
-    alpaca_output["chr"] = (
-        alpaca_output.segment.str.split("_", expand=True)[0].apply(_normalize_chr_label)
-    )
-    alpaca_output["Start"] = alpaca_output.segment.str.split("_", expand=True)[
-        1
-    ].astype(int)
-    alpaca_output["End"] = alpaca_output.segment.str.split("_", expand=True)[2].astype(
-        int
-    )
+    segment_parts = alpaca_output.segment.str.split("_", expand=True)
+    alpaca_output["chr"] = segment_parts[0].apply(_normalize_chr_label)
+    alpaca_output["Start"] = segment_parts[1].astype(int)
+    alpaca_output["End"] = segment_parts[2].astype(int)
     # modify segment positions to absolute:
     alpaca_output = alpaca_output.merge(chr_table, on="chr", how="left")
     alpaca_output["abs_start"] = alpaca_output["Start"] + alpaca_output["shift"]
@@ -319,9 +318,10 @@ def plot_heatmap_with_tree(
     # order sections according to proximity
     # start with on of the longest paths
     section_termini = [x[-1] for x in sections]
-    initial_node = [s for s in sections if len(s) == max([len(x) for x in sections])][
-        0
-    ][-1]
+    initial_candidates = [
+        s for s in sections if len(s) == max([len(x) for x in sections])
+    ]
+    initial_node = sorted(initial_candidates, key=_lexical_section_key)[0][-1]
     # simplify tree graph:
     simple_tree = [
         [clone for clone in branch if clone in section_termini] for branch in tree
@@ -358,7 +358,9 @@ def plot_heatmap_with_tree(
             closest_neighbours = closest_candidates[
                 closest_candidates.level == max(closest_candidates.level)
             ]
-            closest_neighbour = closest_neighbours.clone.values[0]
+            closest_neighbour = closest_neighbours.sort_values(
+                "clone", key=lambda series: series.astype(str)
+            ).clone.values[0]
             if closest_neighbour not in processed_nodes:
                 processed_nodes.append(closest_neighbour)
         nodes = [n for n in nodes if n != node]
@@ -689,9 +691,10 @@ def plot_cpn_per_clone(
     # order sections according to proximity
     # start with on of the longest paths
     section_termini = [x[-1] for x in sections]
-    initial_node = [s for s in sections if len(s) == max([len(x) for x in sections])][
-        0
-    ][-1]
+    initial_candidates = [
+        s for s in sections if len(s) == max([len(x) for x in sections])
+    ]
+    initial_node = sorted(initial_candidates, key=_lexical_section_key)[0][-1]
     # simplify tree graph:
     simple_tree = [
         [clone for clone in branch if clone in section_termini] for branch in tree
@@ -728,7 +731,9 @@ def plot_cpn_per_clone(
             closest_neighbours = closest_candidates[
                 closest_candidates.level == max(closest_candidates.level)
             ]
-            closest_neighbour = closest_neighbours.clone.values[0]
+            closest_neighbour = closest_neighbours.sort_values(
+                "clone", key=lambda series: series.astype(str)
+            ).clone.values[0]
             if closest_neighbour not in processed_nodes:
                 processed_nodes.append(closest_neighbour)
         nodes = [n for n in nodes if n != node]
@@ -1421,6 +1426,13 @@ def plot_heat_map(
     patient_output = patient_output.merge(tree_graph_df)
     patient_output = patient_output.sort_values("y_loc")
     max_palette_state = max(cpn_palette.keys())
+    patient_output["predicted_cpn_state"] = (
+        pd.to_numeric(patient_output["predicted_cpn"], errors="coerce")
+        .fillna(0)
+        .round()
+        .astype(int)
+        .clip(lower=0, upper=max_palette_state)
+    )
 
     def getColour(cp_state):
         try:
@@ -1434,49 +1446,47 @@ def plot_heat_map(
     # fig = go.Figure(layout_xaxis_range=[0, 3.2 * 10 ** 9], layout_yaxis_range=[0, len(clones) + 1])
     for clone_index, clone_name in enumerate(clones):
         clone_df = patient_output[patient_output["clone"] == clone_name]
-        for cp_state in clone_df.predicted_cpn.unique():
-            clone_df_cp_state = clone_df[clone_df.predicted_cpn == cp_state]
-            segments_predicted = [
-                [
-                    tuple([row[1]["abs_start"], clone_index - 0.5]),
-                    tuple([row[1]["abs_end"], clone_index + 0.5]),
-                ]
-                for row in clone_df_cp_state.iterrows()
-            ]
-            segments_predicted_unique = []
-            for x in segments_predicted:
-                if x not in segments_predicted_unique:
-                    segments_predicted_unique.append(x)
+        if clone_df.empty:
+            continue
+
+        y0 = clone_index - 0.5
+        y1 = clone_index + 0.5
+
+        # Batch all rectangles for the same copy-number state into one trace.
+        for cp_state, clone_df_cp_state in clone_df.groupby(
+            "predicted_cpn_state", sort=False
+        ):
+            rectangles = (
+                clone_df_cp_state[["abs_start", "abs_end"]]
+                .drop_duplicates()
+                .sort_values(["abs_start", "abs_end"])
+                .to_numpy()
+            )
+            if rectangles.size == 0:
+                continue
+
+            x_coords = []
+            y_coords = []
+            for abs_start, abs_end in rectangles:
+                x_coords.extend([abs_start, abs_start, abs_end, abs_end, abs_start, None])
+                y_coords.extend([y0, y1, y1, y0, y0, None])
+
             cpn_color = getColour(cp_state)
-            for rectangle in segments_predicted_unique:
-                segment = clone_df_cp_state[
-                    clone_df_cp_state["abs_start"] == rectangle[0][0]
-                ].segment.unique()[0]
-                fig.add_trace(
-                    go.Scatter(
-                        showlegend=False,
-                        x=[
-                            rectangle[0][0],
-                            rectangle[0][0],
-                            rectangle[1][0],
-                            rectangle[1][0],
-                        ],
-                        y=[
-                            rectangle[0][1],
-                            rectangle[1][1],
-                            rectangle[1][1],
-                            rectangle[0][1],
-                        ],
-                        # y=[rectangle[0][1], rectangle[0][1] + 1, rectangle[0][1] + 1, rectangle[0][1]],
-                        fill="toself",
-                        mode="lines",
-                        fillcolor=cpn_color,
-                        line_color=cpn_color,
-                        name=f"clone: {rectangle[0][1]}, seg: {segment}",
-                    ),
-                    row=1,
-                    col=2,
-                )
+            fig.add_trace(
+                go.Scatter(
+                    showlegend=False,
+                    x=x_coords,
+                    y=y_coords,
+                    fill="toself",
+                    mode="lines",
+                    fillcolor=cpn_color,
+                    line=dict(color=cpn_color, width=0),
+                    hoverinfo="skip",
+                    name=f"clone: {clone_name}, state: {cp_state}",
+                ),
+                row=1,
+                col=2,
+            )
         if driver_mutations is not None:
             clone_mutations = driver_mutations[driver_mutations.clone == clone_name]
             if not clone_mutations.empty:
