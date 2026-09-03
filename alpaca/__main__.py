@@ -64,6 +64,11 @@ def main():
     elif command == "run":
         run_alpaca()
         return
+    elif command == "get-scores":
+        import alpaca.scripts as scripts
+
+        scripts.run_get_scores()
+        return
 
     print(f"Unknown command: {command}")
     print("Run 'alpaca help' for available commands.")
