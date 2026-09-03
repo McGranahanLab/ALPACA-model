@@ -97,6 +97,7 @@ def show_help():
     print("  version              Show version")
     print("  help                 Show this help")
     print("  run                  Run ALPACA")
+    print("  get-scores           Recalculate D_score and CI_score for a tumour from existing outputs")
     print("  input-conversion     Run input conversion")
     print("  ccd                  Calculate clone copy number diversity")
     print("  wgd                  Calculate parent/child WGD ratios")
