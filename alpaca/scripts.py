@@ -230,6 +230,11 @@ def run_get_scores():
         description="Recalculate D_score and CI_score for a tumour without rerunning the model."
     )
     parser.add_argument(
+        "command",
+        choices=["get-scores"],
+        help="Command to run",
+    )
+    parser.add_argument(
         "--input_tumour_directory",
         required=True,
         help="Tumour input directory produced by ALPACA input conversion and used for a standard ALPACA run.",
