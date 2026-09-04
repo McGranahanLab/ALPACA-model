@@ -7,7 +7,6 @@ def get_chr_table(chr_table_path):
     chr_table['cumsum'] = np.cumsum(chr_table['len'])
     chr_table['shift'] = [0] + list(chr_table['cumsum'][:-1])
     chr_table['ticks'] = chr_table['shift'] + chr_table['len'] / 2
-    chr_table = chr_table[:-2]
     return chr_table
 
 
