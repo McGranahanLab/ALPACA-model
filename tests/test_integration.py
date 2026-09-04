@@ -91,6 +91,35 @@ def test_correct_input(tmp_path, repo_root, run_alpaca, update_golden):
 
 
 @pytest.mark.integration
+def test_get_scores(tmp_path, repo_root, run_alpaca):
+    input_dir = repo_root / "examples" / "example_cohort" / "input" / TUMOUR_ID
+    run_alpaca(
+        "run",
+        "--input_tumour_directory", str(input_dir),
+        "--output_directory", str(tmp_path),
+        "--debug",
+        *_PYOMO_SCIP,
+    )
+
+    result = run_alpaca(
+        "get-scores",
+        "--input_tumour_directory", str(input_dir),
+        "--output_directory", str(tmp_path),
+    )
+    assert result.returncode == 0, result.stderr
+
+    scores_path = tmp_path / f"ALPACA_scores_{TUMOUR_ID}.csv"
+    assert scores_path.exists(), "Expected ALPACA_scores_<tumour>.csv to be created."
+
+    df = pd.read_csv(scores_path)
+    required_cols = {"tumour_id", "segment", "D_score", "CI_score"}
+    assert required_cols.issubset(df.columns), df.columns.tolist()
+    assert not df.empty
+    assert (df["D_score"] >= 0).all()
+    assert (df["CI_score"] >= 0).all()
+
+
+@pytest.mark.integration
 def test_newick_tree_input(tmp_path, repo_root, run_alpaca, update_golden):
     input_dir = repo_root / "tests" / "newick_tree" / "input" / TUMOUR_ID
     run_alpaca(

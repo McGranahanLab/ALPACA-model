@@ -221,6 +221,122 @@ def run_calculate_wgd():
         exit(1)
 
 
+def run_get_scores():
+    """Recalculate per-segment D_score and CI_score from existing outputs."""
+    import pandas as pd
+
+    logger = create_logger(name="get_scores", log_dir="logs")
+    parser = argparse.ArgumentParser(
+        description="Recalculate D_score and CI_score for a tumour without rerunning the model."
+    )
+    parser.add_argument(
+        "command",
+        choices=["get-scores"],
+        help="Command to run",
+    )
+    parser.add_argument(
+        "--input_tumour_directory",
+        required=True,
+        help="Tumour input directory produced by ALPACA input conversion and used for a standard ALPACA run.",
+    )
+    parser.add_argument(
+        "--output_directory",
+        required=True,
+        help="Directory containing the ALPACA output CSV to score.",
+    )
+    args = parser.parse_args()
+
+    input_dir = Path(args.input_tumour_directory).expanduser().resolve()
+    output_dir = Path(args.output_directory).expanduser().resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    required_input_files = [
+        "ALPACA_input_table.csv",
+        "cp_table.csv",
+        "ci_table.csv",
+    ]
+    missing_inputs = [name for name in required_input_files if not (input_dir / name).exists()]
+    if missing_inputs:
+        raise FileNotFoundError(
+            f"Missing required input files in {input_dir}: {', '.join(missing_inputs)}"
+        )
+
+    input_df = pd.read_csv(input_dir / "ALPACA_input_table.csv")
+    if input_df["tumour_id"].nunique() != 1:
+        raise ValueError("Expected exactly one tumour_id in the tumour input directory.")
+    tumour_id = input_df["tumour_id"].iloc[0]
+
+    cp_table = pd.read_csv(input_dir / "cp_table.csv", index_col="clone")
+    ci_table = pd.read_csv(input_dir / "ci_table.csv")
+
+    output_matches = sorted(output_dir.glob("ALPACA_output*.csv"))
+    if not output_matches:
+        raise FileNotFoundError(
+            f"No ALPACA_output*.csv file found in {output_dir}. Run 'alpaca run' first or pass the output directory containing the result CSV."
+        )
+
+    output_path = None
+    if len(output_matches) == 1:
+        output_path = output_matches[0]
+    else:
+        for candidate in output_matches:
+            if tumour_id in candidate.name:
+                output_path = candidate
+                break
+        if output_path is None:
+            output_path = output_matches[0]
+
+    results_df = pd.read_csv(output_path)
+    required_cols = {"tumour_id", "segment", "clone", "pred_CN_A", "pred_CN_B"}
+    missing_cols = sorted(required_cols - set(results_df.columns))
+    if missing_cols:
+        raise ValueError(
+            f"Output CSV {output_path} is missing required columns: {missing_cols}"
+        )
+
+    rows = []
+    for segment, segment_df in results_df.groupby("segment"):
+        segment_input = input_df[input_df["segment"] == segment].copy()
+        if segment_input.empty:
+            continue
+        segment_ci = ci_table[ci_table["segment"] == segment].copy()
+        clone_values = segment_df[["clone", "pred_CN_A", "pred_CN_B"]].drop_duplicates().set_index("clone")
+
+        total_d = 0.0
+        total_ci = 0
+        for sample in segment_input["sample"].unique():
+            sample_row = segment_input[segment_input["sample"] == sample].iloc[0]
+            sample_props = cp_table[sample].reindex(clone_values.index).fillna(0.0)
+            pred_a = float((sample_props * clone_values["pred_CN_A"]).sum())
+            pred_b = float((sample_props * clone_values["pred_CN_B"]).sum())
+            total_d += abs(pred_a - sample_row["cpnA"]) + abs(pred_b - sample_row["cpnB"])
+
+            ci_row = segment_ci[segment_ci["sample"] == sample]
+            if ci_row.empty:
+                continue
+            ci_row = ci_row.iloc[0]
+            if pred_a < ci_row["lower_CI_A"] or pred_a > ci_row["upper_CI_A"]:
+                total_ci += 1
+            if pred_b < ci_row["lower_CI_B"] or pred_b > ci_row["upper_CI_B"]:
+                total_ci += 1
+
+        rows.append(
+            {
+                "tumour_id": tumour_id,
+                "segment": segment,
+                "D_score": round(float(total_d), 3),
+                "CI_score": int(total_ci),
+            }
+        )
+
+    scores_df = pd.DataFrame(rows, columns=["tumour_id", "segment", "D_score", "CI_score"])
+    output_name = output_dir / f"ALPACA_scores_{tumour_id}.csv"
+    scores_df.to_csv(output_name, index=False)
+    logger.info(f"Saved recalculated scores to {output_name}")
+    print(f"Saved recalculated scores to {output_name}")
+    return 0
+
+
 def run_plot_tumour():
     """CLI wrapper for generating plots/notebooks once ALPACA outputs exist."""
     from alpaca.plotting import (
