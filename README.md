@@ -76,6 +76,8 @@ Optional solver note: ALPACA can use Gurobi for optimization. If you plan to use
 
 Preprocessing note: if you use ALPACA input-conversion utilities based on CONIPHER/Refphase outputs, an R installation is required for that preprocessing step.
 
+Container note: a Docker image with all supported solvers (SCIP, GLPK, and optionally Gurobi) and the R runtime pre-installed is available via the `Dockerfile` at the repository root. See [DOCKER.md](DOCKER.md) for build, run, and Singularity/HPC instructions.
+
 <!-- TOC --><a name="testing-installation"></a>
 ### Testing installation
 

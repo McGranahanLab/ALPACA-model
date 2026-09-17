@@ -1,0 +1,26 @@
+# Note: .git is intentionally *not* excluded because pyproject.toml uses
+# hatch-vcs, which reads the version from git tags at build time. The .git
+# directory is only pulled into the builder stage and never reaches the
+# runtime image.
+.gitignore
+.github
+.idea
+.vscode
+.DS_Store
+**/.DS_Store
+**/__pycache__
+**/*.pyc
+**/*.pyo
+*.log
+
+# Repo-specific dev / notebook / test artefacts
+dev/
+tests/test_output/
+tests/compare_solvers/output*
+tests/archive/
+TODO.md
+
+# Docs / assets that don't need to be inside the image.
+# README.md is retained because pyproject.toml references it during the build.
+DOCKER.md
+docs/
