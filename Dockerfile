@@ -42,15 +42,11 @@ WORKDIR /src
 
 COPY --chown=$MAMBA_USER:$MAMBA_USER environment.yml /tmp/environment.yml
 
-# Install the environment from the repo's environment.yml, plus:
-#   - kneed / matplotlib-base: listed in pyproject.toml but not environment.yml;
-#     the recipe/meta.yaml runtime list has them, so we mirror that here.
-#   - r-base + r-jsonlite + r-optparse: for the input-conversion R scripts
-#     used by convert_conipher_output.R and extract_rephase_data.R.
+# Install the environment from the repo's environment.yml, plus r-base and
+# the two CRAN packages needed by the input-conversion R scripts
+# (convert_conipher_output.R and extract_rephase_data.R).
 RUN micromamba install -y -n base -f /tmp/environment.yml \
  && micromamba install -y -n base -c conda-forge \
-        kneed \
-        matplotlib-base \
         r-base \
         r-jsonlite \
         r-optparse \

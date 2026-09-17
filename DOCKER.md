@@ -76,11 +76,19 @@ a Gurobi licence and your data exceeds the demo size.
 
 The `gurobipy` package is installed via `environment.yml`, but Gurobi itself
 requires a licence for anything larger than its built-in demo size (~2000
-variables). Mount your licence at run time — never bake it into the image.
+variables). Provide your licence at run time — never bake it into the image.
+
+### Floating (token server) licence
+
+The most common academic and site-wide setup. The licence file is a small
+text file containing `TOKENSERVER=<host>` (and optionally `PORT=<port>`,
+default `41954`). Mount it into the container and make sure the container
+can reach the token server:
 
 ```bash
 docker run --rm \
     --user "$(id -u):$(id -g)" \
+    --network host \
     -v "$PWD:/work" \
     -v "$HOME/gurobi.lic:/opt/gurobi/gurobi.lic:ro" \
     -e GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic \
@@ -90,20 +98,27 @@ docker run --rm \
     --solver gurobi
 ```
 
-### Licence-type caveats
+`--network host` is the simplest way to guarantee the container can reach
+the token server on the campus/lab network. If you prefer to keep container
+isolation, drop `--network host` and instead ensure the token server's host
+and port are reachable from Docker's default bridge network (may require
+firewall/DNS tweaks).
 
-| Licence type                     | Works in containers? | Notes                                                            |
-| -------------------------------- | -------------------- | ---------------------------------------------------------------- |
-| WLS / Named-User Academic (Web)  | Yes                  | No hardware fingerprint check; mount `gurobi.lic` as above.      |
-| Floating (token server)          | Yes                  | Container must reach the token server (usually port `41954`).    |
-| Node-locked (`grbgetkey`)        | Often no             | Fingerprints host MAC/hostname; the container's differ. See below. |
+### Web License Service (WLS) / Named-User Academic
 
-If you only have a node-locked academic licence, either:
+Works out of the box — no hardware fingerprint, no token-server network
+requirement. Same command as above but without `--network host`.
 
-1. Request a **WLS Academic** licence from Gurobi (free swap for academics), or
-2. Run the container with `--network host --hostname $(hostname)` and mount
-   `/etc/hosts`, so the licence check sees the licensed machine. This is
-   fragile and not recommended for HPC.
+### Node-locked (`grbgetkey`) licence
+
+Node-locked licences fingerprint the licensed machine's MAC/hostname, which
+the container does not share. Two workarounds:
+
+1. Request a **WLS Academic** or **floating** licence from Gurobi (free
+   swap for academics), then use the sections above.
+2. Run the container with `--network host --hostname $(hostname)` and bind
+   `/etc/hosts:/etc/hosts:ro` so the licence check sees the licensed
+   machine. Fragile and non-portable — do not use on HPC.
 
 ## Singularity / Apptainer
 
@@ -132,7 +147,9 @@ singularity exec alpaca.sif alpaca run \
     --solver pyomo --pyomo_solver scip
 ```
 
-Run with Gurobi, bind-mounting your licence:
+Run with a Gurobi floating (token-server) licence — Singularity uses the
+host network by default, so no extra flag is needed to reach the token
+server:
 
 ```bash
 singularity exec \
@@ -141,10 +158,11 @@ singularity exec \
     alpaca.sif alpaca run --solver gurobi ...
 ```
 
-Node-locked licences generally do not work under Singularity for the same
-reason as Docker — the container's MAC/hostname differ from the host — unless
-you use `--net --network=host` combined with matching `--hostname`. WLS
-licences are the least painful option on HPC.
+WLS / Named-User Academic licences use the same command. Node-locked
+licences generally do not work under Singularity for the same reason as
+Docker — the container's MAC/hostname differ from the host — unless you
+add `--hostname <licensed-host>`. Floating and WLS licences are the least
+painful options on HPC.
 
 ## Extending the image
 
