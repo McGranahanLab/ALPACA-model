@@ -42,10 +42,15 @@ WORKDIR /src
 
 COPY --chown=$MAMBA_USER:$MAMBA_USER environment.yml /tmp/environment.yml
 
-# Install the environment from the repo's environment.yml, plus R and the two
-# CRAN packages required by the input-conversion R scripts.
+# Install the environment from the repo's environment.yml, plus:
+#   - kneed / matplotlib-base: listed in pyproject.toml but not environment.yml;
+#     the recipe/meta.yaml runtime list has them, so we mirror that here.
+#   - r-base + r-jsonlite + r-optparse: for the input-conversion R scripts
+#     used by convert_conipher_output.R and extract_rephase_data.R.
 RUN micromamba install -y -n base -f /tmp/environment.yml \
  && micromamba install -y -n base -c conda-forge \
+        kneed \
+        matplotlib-base \
         r-base \
         r-jsonlite \
         r-optparse \
@@ -72,9 +77,16 @@ LABEL org.opencontainers.image.title="ALPACA" \
       org.opencontainers.image.licenses="MIT"
 
 USER root
+# ca-certificates: needed for TLS out of the container.
+# chromium: kaleido >=1.0 shells out to headless Chrome to render Plotly
+#   figures for `--plot_output_mode pdf`. Without it, PDF plots fail and
+#   the example script's final step falls back to a warning.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        chromium \
  && rm -rf /var/lib/apt/lists/*
+ENV KALEIDO_BROWSER_EXECUTABLE=/usr/bin/chromium
 
 # Bring the fully solved conda env over from the builder.
 COPY --from=builder --chown=$MAMBA_USER:$MAMBA_USER /opt/conda /opt/conda

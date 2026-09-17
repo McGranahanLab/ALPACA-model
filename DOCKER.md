@@ -22,14 +22,27 @@ docker build -t alpaca:latest .
 ```
 
 The build takes ~10–15 minutes on a typical laptop; most of the time is spent
-solving the conda environment. The resulting image is roughly 2.5 GB.
+solving the conda environment. The resulting image is roughly 4 GB (~2.5 GB of
+conda env, plus Chromium for headless PDF plot rendering).
+
+If your host uses systemd-resolved (Ubuntu 22.04+, Debian 12+, Fedora),
+containers may not be able to resolve DNS on the default `bridge` network.
+Pass `--network=host` to the build if you see `Temporary failure resolving`
+errors:
+
+```bash
+docker build --network=host -t alpaca:latest .
+```
 
 ## Run — open-source solvers
 
 The image defaults to the Pyomo + SCIP backend, which needs no licence:
 
 ```bash
-docker run --rm -v "$PWD:/work" alpaca:latest run \
+docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "$PWD:/work" \
+    alpaca:latest run \
     --input_tumour_directory /work/examples/example_cohort/input/LTX0000-Tumour1 \
     --output_directory       /work/examples/example_cohort/output/LTX0000-Tumour1 \
     --plot_output_mode pdf \
@@ -37,17 +50,27 @@ docker run --rm -v "$PWD:/work" alpaca:latest run \
     --solver pyomo --pyomo_solver scip
 ```
 
+`--user "$(id -u):$(id -g)"` makes the container write output files as the
+host user (the image otherwise runs as its bundled `mambauser`, uid 57439,
+which cannot write into host-owned directories).
+
 To run the full example script (which also exercises `input-conversion`,
-`ancestor-delta`, `ccd`, `wgd`, and `plot-tumour`), override the entrypoint:
+`ancestor-delta`, `ccd`, `wgd`, and `plot-tumour`), override the entrypoint
+to the micromamba activation shim so the conda env stays on `$PATH`:
 
 ```bash
-docker run --rm -v "$PWD:/work" -w /work \
-    --entrypoint bash alpaca:latest examples/run_example.sh
+docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "$PWD:/work" -w /work \
+    --entrypoint /usr/local/bin/_entrypoint.sh \
+    alpaca:latest bash examples/run_example.sh
 ```
 
-The example script uses `--solver gurobi` as ALPACA's CLI default; pass
-`--solver pyomo --pyomo_solver scip` in your own runs if you don't have a
-Gurobi licence available.
+The example script uses `--solver gurobi` (ALPACA's CLI default). The
+example dataset is small enough to solve under the size-limited demo licence
+bundled with `gurobipy`, so no licence file is required for the smoke test.
+Pass `--solver pyomo --pyomo_solver scip` in your own runs if you don't have
+a Gurobi licence and your data exceeds the demo size.
 
 ## Run — Gurobi backend
 
@@ -57,6 +80,7 @@ variables). Mount your licence at run time — never bake it into the image.
 
 ```bash
 docker run --rm \
+    --user "$(id -u):$(id -g)" \
     -v "$PWD:/work" \
     -v "$HOME/gurobi.lic:/opt/gurobi/gurobi.lic:ro" \
     -e GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic \
@@ -158,3 +182,11 @@ CONIPHER `.tree.RDS` needs it to deserialise.
   ~0.5% of segments (README §Solver selection). Fall back to Gurobi for those.
 - **Very slow build** — most time goes into solving the conda environment;
   cache `~/.cache/pip` and use BuildKit (`DOCKER_BUILDKIT=1`).
+- **`Permission denied` writing outputs** — pass `--user "$(id -u):$(id -g)"`
+  so the container writes files as the host user.
+- **`Kaleido requires Google Chrome to be installed`** — the image ships
+  Chromium at `/usr/bin/chromium` and exports `KALEIDO_BROWSER_EXECUTABLE`.
+  If you rebuild without Chromium, either install it in your derived image
+  or run with `--plot_output_mode notebook` to skip the PDF renderer.
+- **`Temporary failure resolving deb.debian.org` during build** — pass
+  `--network=host` to `docker build` (see [Build](#build)).
