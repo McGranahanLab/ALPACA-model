@@ -695,13 +695,13 @@ These options are forwarded via `--pyomo_solver_options` and are supported by Gu
 Pull from docker hub:
 
 ```bash
-docker image pull wlippa/alpaca:1.0
+docker image pull wlippa/alpaca:latest
 ```
 
 Or build from the repository root:
 
 ```bash
-docker build -t alpaca:1.0 .
+docker build -t alpaca:latest .
 ```
 The build takes ~10–15 minutes on a typical laptop. The resulting image is roughly 4 GB (~2.5 GB of
 conda env, plus Chromium for headless PDF plot rendering).
@@ -714,7 +714,7 @@ The image defaults to the Pyomo + SCIP backend, which needs no licence:
 docker run --rm \
     --user "$(id -u):$(id -g)" \
     -v "$PWD:/work" \
-    wlippa/alpaca:1.0 run \
+    wlippa/alpaca:latest run \
     --input_tumour_directory /work/examples/example_cohort/input/LTX0000-Tumour1 \
     --output_directory       /work/examples/example_cohort/output/LTX0000-Tumour1 \
     --plot_output_mode pdf \
@@ -735,7 +735,7 @@ docker run --rm \
     --user "$(id -u):$(id -g)" \
     -v "$PWD:/work" -w /work \
     --entrypoint /usr/local/bin/_entrypoint.sh \
-    wlippa/alpaca:1.0 bash examples/run_example.sh
+    wlippa/alpaca:latest bash examples/run_example.sh
 ```
 
 ### Run — Gurobi backend
@@ -758,7 +758,7 @@ docker run --rm \
     -v "$PWD:/work" \
     -v "$HOME/gurobi.lic:/opt/gurobi/gurobi.lic:ro" \
     -e GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic \
-    wlippa/alpaca:1.0 run \
+    wlippa/alpaca:latest run \
     --input_tumour_directory /work/examples/example_cohort/input/LTX0000-Tumour1 \
     --output_directory       /work/examples/example_cohort/output/LTX0000-Tumour1 \
     --solver gurobi
@@ -776,7 +776,7 @@ Convert the Docker image to a SIF file. From a machine that has Docker:
 
 ```bash
 
-singularity pull alpaca.sif docker://wlippa/alpaca:1.0
+singularity pull alpaca.sif docker://wlippa/alpaca:latest
 ```
 
 
