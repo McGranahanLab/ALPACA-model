@@ -59,6 +59,8 @@ Repository containing core ALPACA code
 
 ALPACA is implemented in Python and requires Linux or macOS.
 
+We recommend running ALPACA via provided Docker container. See [Running ALPACA in a container](#running-alpaca-in-a-container) below for instructions, including conversion from Docker to Singularity/Apptainer
+
 Install ALPACA from conda (recommended) with either `mamba` or `conda`:
 
 ```bash
