@@ -169,6 +169,398 @@ def load_mutation_table(input_dir, explicit_path=None):
     return None
 
 
+def _format_sample_labels(samples, tumour_id=None):
+    labels = [str(sample) for sample in samples]
+    if not tumour_id:
+        return labels
+
+    prefix = f"{tumour_id}_"
+    return [label[len(prefix) :] if label.startswith(prefix) else label for label in labels]
+
+
+def _apply_min_ci_adjustments(segment_ci, ci_modified_report, target_segment):
+    """Return CI table with min_ci-based expansions applied for affected rows."""
+
+    adjusted_ci = segment_ci.copy()
+    if ci_modified_report is None or ci_modified_report.empty:
+        return adjusted_ci
+    if "segment" not in ci_modified_report.columns:
+        return adjusted_ci
+
+    report = ci_modified_report.copy()
+    report = report[report["segment"].astype(str) == str(target_segment)]
+    if report.empty:
+        return adjusted_ci
+
+    for _, report_row in report.iterrows():
+        if "min_ci" not in report_row or pd.isna(report_row["min_ci"]):
+            continue
+
+        min_ci = float(report_row["min_ci"])
+        sample_name = str(report_row.get("affected_sample", "")).strip()
+        allele_token = str(report_row.get("affected_allele", "")).strip().upper()
+
+        if not sample_name:
+            sample_mask = pd.Series([True] * len(adjusted_ci), index=adjusted_ci.index)
+        else:
+            sample_mask = adjusted_ci["sample"].astype(str) == sample_name
+
+        if allele_token in {"A", "B"}:
+            alleles = [allele_token]
+        else:
+            alleles = ["A", "B"]
+
+        for allele in alleles:
+            lower_col = f"lower_CI_{allele}"
+            upper_col = f"upper_CI_{allele}"
+            if lower_col not in adjusted_ci.columns or upper_col not in adjusted_ci.columns:
+                continue
+
+            midpoint = (
+                adjusted_ci.loc[sample_mask, upper_col] + adjusted_ci.loc[sample_mask, lower_col]
+            ) / 2.0
+            adjusted_ci.loc[sample_mask, upper_col] = midpoint + min_ci / 2.0
+            adjusted_ci.loc[sample_mask, lower_col] = midpoint - min_ci / 2.0
+            adjusted_ci[lower_col] = adjusted_ci[lower_col].clip(lower=0.0)
+
+    return adjusted_ci
+
+
+def _build_segment_fit_table(
+    sample_table,
+    ci_table,
+    alpaca_output,
+    cp_table,
+    segment,
+    ci_modified_report=None,
+):
+    if sample_table is None or sample_table.empty:
+        raise ValueError("Sample-level copy number table is empty.")
+    if ci_table is None or ci_table.empty:
+        raise ValueError("Confidence interval table is empty.")
+    if alpaca_output is None or alpaca_output.empty:
+        raise ValueError("ALPACA output is empty.")
+    if cp_table is None or cp_table.empty:
+        raise ValueError("Clone proportion table is empty.")
+
+    target_segment = str(segment)
+    sample_required = {"sample", "segment", "cpnA", "cpnB"}
+    ci_required = {
+        "sample",
+        "segment",
+        "lower_CI_A",
+        "upper_CI_A",
+        "lower_CI_B",
+        "upper_CI_B",
+    }
+    output_required = {"clone", "segment", "pred_CN_A", "pred_CN_B"}
+
+    missing_sample_cols = sample_required - set(sample_table.columns)
+    missing_ci_cols = ci_required - set(ci_table.columns)
+    missing_output_cols = output_required - set(alpaca_output.columns)
+    if missing_sample_cols:
+        raise ValueError(
+            "Sample-level table is missing required columns: "
+            + ", ".join(sorted(missing_sample_cols))
+        )
+    if missing_ci_cols:
+        raise ValueError(
+            "Confidence interval table is missing required columns: "
+            + ", ".join(sorted(missing_ci_cols))
+        )
+    if missing_output_cols:
+        raise ValueError(
+            "ALPACA output is missing required columns: "
+            + ", ".join(sorted(missing_output_cols))
+        )
+
+    segment_samples = sample_table[
+        sample_table["segment"].astype(str) == target_segment
+    ].copy()
+    if segment_samples.empty:
+        raise ValueError(f"Segment '{target_segment}' not found in sample input table.")
+
+    segment_ci = ci_table[ci_table["segment"].astype(str) == target_segment].copy()
+    if segment_ci.empty:
+        raise ValueError(f"Segment '{target_segment}' not found in confidence interval table.")
+    expanded_segment_ci = _apply_min_ci_adjustments(
+        segment_ci=segment_ci,
+        ci_modified_report=ci_modified_report,
+        target_segment=target_segment,
+    )
+
+    segment_output = alpaca_output[
+        alpaca_output["segment"].astype(str) == target_segment
+    ].copy()
+    if segment_output.empty:
+        raise ValueError(f"Segment '{target_segment}' not found in ALPACA output.")
+
+    clone_values = (
+        segment_output[["clone", "pred_CN_A", "pred_CN_B"]]
+        .drop_duplicates()
+        .set_index("clone")
+    )
+    clone_values["pred_CN_A"] = pd.to_numeric(clone_values["pred_CN_A"], errors="coerce")
+    clone_values["pred_CN_B"] = pd.to_numeric(clone_values["pred_CN_B"], errors="coerce")
+    if clone_values[["pred_CN_A", "pred_CN_B"]].isna().any().any():
+        raise ValueError("Predicted copy numbers could not be parsed as numeric values.")
+
+    sample_order = remove_duplicates_preserve_order(
+        segment_samples["sample"].astype(str).tolist()
+    )
+    tumour_id = (
+        str(segment_samples["tumour_id"].iloc[0])
+        if "tumour_id" in segment_samples.columns and not segment_samples.empty
+        else None
+    )
+
+    total_d = 0.0
+    calculated_ci_score = 0
+    rows = []
+    for sample in sample_order:
+        sample_row = segment_samples[segment_samples["sample"].astype(str) == sample].iloc[0]
+        if sample not in cp_table.columns:
+            raise ValueError(
+                f"Sample '{sample}' is missing from clone proportion table columns."
+            )
+
+        sample_props = pd.to_numeric(cp_table[sample], errors="coerce").reindex(clone_values.index).fillna(0.0)
+        pred_a = float((sample_props * clone_values["pred_CN_A"]).sum())
+        pred_b = float((sample_props * clone_values["pred_CN_B"]).sum())
+        observed_a = float(sample_row["cpnA"])
+        observed_b = float(sample_row["cpnB"])
+        residual_a = abs(pred_a - observed_a)
+        residual_b = abs(pred_b - observed_b)
+        total_d += residual_a + residual_b
+
+        ci_row = segment_ci[segment_ci["sample"].astype(str) == sample]
+        if ci_row.empty:
+            raise ValueError(
+                f"Sample '{sample}' is missing from the confidence interval table for segment '{target_segment}'."
+            )
+        ci_row = ci_row.iloc[0]
+
+        expanded_ci_row = expanded_segment_ci[
+            expanded_segment_ci["sample"].astype(str) == sample
+        ]
+        if expanded_ci_row.empty:
+            raise ValueError(
+                f"Sample '{sample}' is missing from the expanded confidence interval table for segment '{target_segment}'."
+            )
+        expanded_ci_row = expanded_ci_row.iloc[0]
+
+        lower_a = float(ci_row["lower_CI_A"])
+        upper_a = float(ci_row["upper_CI_A"])
+        lower_b = float(ci_row["lower_CI_B"])
+        upper_b = float(ci_row["upper_CI_B"])
+        expanded_lower_a = float(expanded_ci_row["lower_CI_A"])
+        expanded_upper_a = float(expanded_ci_row["upper_CI_A"])
+        expanded_lower_b = float(expanded_ci_row["lower_CI_B"])
+        expanded_upper_b = float(expanded_ci_row["upper_CI_B"])
+        if pred_a < expanded_lower_a or pred_a > expanded_upper_a:
+            calculated_ci_score += 1
+        if pred_b < expanded_lower_b or pred_b > expanded_upper_b:
+            calculated_ci_score += 1
+
+        rows.append(
+            {
+                "sample": sample,
+                "sample_label": _format_sample_labels([sample], tumour_id=tumour_id)[0],
+                "observed_A": observed_a,
+                "observed_B": observed_b,
+                "reconstructed_A": pred_a,
+                "reconstructed_B": pred_b,
+                "lower_CI_A": lower_a,
+                "upper_CI_A": upper_a,
+                "lower_CI_B": lower_b,
+                "upper_CI_B": upper_b,
+                "expanded_lower_CI_A": expanded_lower_a,
+                "expanded_upper_CI_A": expanded_upper_a,
+                "expanded_lower_CI_B": expanded_lower_b,
+                "expanded_upper_CI_B": expanded_upper_b,
+                "residual_A": residual_a,
+                "residual_B": residual_b,
+            }
+        )
+
+    fit_df = pd.DataFrame(rows)
+    d_score = round(float(total_d), 3)
+    if "D_score" in segment_output.columns:
+        d_values = pd.to_numeric(segment_output["D_score"], errors="coerce").dropna().unique()
+        if len(d_values) == 1:
+            d_score = round(float(d_values[0]), 3)
+
+    ci_score = int(calculated_ci_score)
+    if "CI_score" in segment_output.columns:
+        ci_values = pd.to_numeric(segment_output["CI_score"], errors="coerce").dropna().unique()
+        if len(ci_values) == 1:
+            ci_score = int(ci_values[0])
+
+    return fit_df, d_score, ci_score
+
+
+def plot_segment_fit(
+    sample_table,
+    ci_table,
+    alpaca_output,
+    cp_table,
+    segment,
+    ci_modified_report=None,
+):
+    """Plot observed and reconstructed copy-number fit for a single segment."""
+
+    fit_df, d_score, ci_score = _build_segment_fit_table(
+        sample_table=sample_table,
+        ci_table=ci_table,
+        alpaca_output=alpaca_output,
+        cp_table=cp_table,
+        segment=segment,
+        ci_modified_report=ci_modified_report,
+    )
+
+    colours_observed = {
+        "A": "rgb(255, 164, 0)",
+        "B": "rgb(0, 128, 128)",
+    }
+    colours_observed_enlarged_cis = {
+            "A": "rgba(255, 164, 0,0.25)",
+            "B": "rgba(0, 128, 128,0.25)",
+        }
+    figure = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.14,
+        subplot_titles=("Allele A", "Allele B"),
+    )
+
+    sample_labels = fit_df["sample_label"].tolist()
+    for row_index, allele in enumerate(("A", "B"), start=1):
+        observed_col = f"observed_{allele}"
+        reconstructed_col = f"reconstructed_{allele}"
+        residual_col = f"residual_{allele}"
+        lower_col = f"lower_CI_{allele}"
+        upper_col = f"upper_CI_{allele}"
+        expanded_lower_col = f"expanded_lower_CI_{allele}"
+        expanded_upper_col = f"expanded_upper_CI_{allele}"
+        observed_values = fit_df[observed_col]
+
+        figure.add_trace(
+            go.Scatter(
+                x=sample_labels,
+                y=observed_values,
+                mode="markers",
+                name=f"Observed {allele}",
+                marker=dict(color=colours_observed[allele], size=9),
+                error_y=dict(
+                    type="data",
+                    symmetric=False,
+                    array=(fit_df[upper_col] - observed_values).tolist(),
+                    arrayminus=(observed_values - fit_df[lower_col]).tolist(),
+                    thickness=1.2,
+                    width=4,
+                    color=colours_observed[allele],
+                ),
+                customdata=np.stack(
+                    [
+                        fit_df[lower_col].to_numpy(),
+                        fit_df[upper_col].to_numpy(),
+                        fit_df[residual_col].to_numpy(),
+                    ],
+                    axis=-1,
+                ),
+                hovertemplate=(
+                    "Sample: %{x}<br>"
+                    "Observed FCN: %{y:.3f}<br>"
+                    "Original CI: [%{customdata[0]:.3f}, %{customdata[1]:.3f}]<br>"
+                    "Residual contribution: %{customdata[2]:.3f}<extra></extra>"
+                ),
+            ),
+            row=row_index,
+            col=1,
+        )
+
+        expanded_ci_changed = (
+            (fit_df[expanded_lower_col] - fit_df[lower_col]).abs() > 1e-12
+        ) | ((fit_df[expanded_upper_col] - fit_df[upper_col]).abs() > 1e-12)
+        if expanded_ci_changed.any():
+            figure.add_trace(
+                go.Scatter(
+                    x=sample_labels,
+                    y=observed_values,
+                    mode="markers",
+                    name=f"Enlarged CI {allele}",
+                    marker=dict(
+                        color=colours_observed_enlarged_cis[allele],
+                        size=7,
+                        symbol="circle-open",
+                        line=dict(color=colours_observed_enlarged_cis[allele], width=1),
+                    ),
+                    error_y=dict(
+                        type="data",
+                        symmetric=False,
+                        array=(fit_df[expanded_upper_col] - observed_values).tolist(),
+                        arrayminus=(observed_values - fit_df[expanded_lower_col]).tolist(),
+                        thickness=1.8,
+                        width=8,
+                        color=colours_observed_enlarged_cis[allele],
+                    ),
+                    customdata=np.stack(
+                        [
+                            fit_df[expanded_lower_col].to_numpy(),
+                            fit_df[expanded_upper_col].to_numpy(),
+                        ],
+                        axis=-1,
+                    ),
+                    hovertemplate=(
+                        "Sample: %{x}<br>"
+                        "Enlarged CI: [%{customdata[0]:.3f}, %{customdata[1]:.3f}]<extra></extra>"
+                    ),
+                ),
+                row=row_index,
+                col=1,
+            )
+
+        figure.add_trace(
+            go.Scatter(
+                x=sample_labels,
+                y=fit_df[reconstructed_col],
+                mode="markers",
+                name=f"Reconstructed {allele}",
+                marker=dict(color="black", size=8, symbol="diamond-wide"),
+                customdata=fit_df[residual_col].to_numpy(),
+                hovertemplate=(
+                    "Sample: %{x}<br>"
+                    "Reconstructed FCN: %{y:.3f}<br>"
+                    "Residual contribution: %{customdata:.3f}<extra></extra>"
+                ),
+            ),
+            row=row_index,
+            col=1,
+        )
+        figure.update_yaxes(title_text="Fractional CN", row=row_index, col=1)
+
+    figure.update_xaxes(title_text="Sample", row=2, col=1)
+    size_increment = 70
+    figure.update_layout(
+        title_text=(
+        f"Segment fit: {segment}<br>"
+        f"<span style='font-size: 12px;'>"
+        f"D_score = {d_score:.3f}; CI_score = {ci_score}"
+        "</span><br>"
+        "<span style='font-size: 11px;'>"
+        "If min_ci option has been used and true confidence intervals were below the minimum, the enlarged CIs are shown as well."
+        "</span>"
+    ),
+        meta={"segment": str(segment), "D_score": d_score, "CI_score": ci_score},
+        template="plotly_white",
+        hovermode="x unified",
+        height=max(size_increment*10, size_increment * len(sample_labels)),
+        legend=dict(orientation="h", yanchor="bottom", y=1.2, xanchor="left", x=0),
+    )
+    return figure
+
+
 def prepare_driver_mutations(mutation_df, tumour_id, chr_table):
     """Return driver mutations annotated with absolute coordinates for the selected tumour."""
     if mutation_df is None or mutation_df.empty:
@@ -1692,6 +2084,7 @@ from alpaca.plotting import (
     prepare_driver_mutations,
     plot_cpn_per_clone,
     plot_heatmap_with_tree,
+    plot_segment_fit,
     plot_sample_level_copy_numbers,
 )
 from alpaca.utils import read_tree_json
@@ -1705,6 +2098,8 @@ TREE_PATH = Path(r"{tree_path_literal}")
 CP_TABLE_PATH = Path(r"{cp_table_literal}")
 ALPACA_OUTPUT_PATH = Path(r"{alpaca_output_literal}")
 SAMPLE_TABLE_PATH = INPUT_DIR / "ALPACA_input_table.csv"
+CI_TABLE_PATH = INPUT_DIR / "ci_table.csv"
+CI_MODIFIED_REPORT_PATH = OUTPUT_DIR / "logs_and_reports" / "ci_modified_report.csv"
 
 HEATMAP_PALETTE = {heatmap_palette_literal}
 GENOME_BUILD = {genome_build_literal}
@@ -1719,6 +2114,16 @@ if SAMPLE_TABLE_PATH.exists():
     sample_table = pd.read_csv(SAMPLE_TABLE_PATH)
 else:
     print("Sample-level input table not found; sample-level plots will be skipped.")
+
+ci_table = None
+if CI_TABLE_PATH.exists():
+    ci_table = pd.read_csv(CI_TABLE_PATH)
+else:
+    print("Confidence interval table not found; segment fit plot will be skipped.")
+
+ci_modified_report = None
+if CI_MODIFIED_REPORT_PATH.exists():
+    ci_modified_report = pd.read_csv(CI_MODIFIED_REPORT_PATH)
 
 mutation_table = load_mutation_table(INPUT_DIR)
 tumour_id = alpaca_output.tumour_id.iloc[0]
@@ -1786,6 +2191,39 @@ else:
     sample_cpn_B.show()
 """
 
+    segment_fit_code = """TARGET_SEGMENT = None
+
+if sample_table is None or sample_table.empty:
+    print("Sample-level input table missing; skipping segment fit plot.")
+elif ci_table is None or ci_table.empty:
+    print("Confidence interval table missing; skipping segment fit plot.")
+else:
+    available_segments = sample_table["segment"].dropna().astype(str).drop_duplicates().tolist()
+    if not available_segments:
+        print("No segments available in the input table; skipping segment fit plot.")
+    else:
+        selected_segment = TARGET_SEGMENT or available_segments[0]
+        if selected_segment not in available_segments:
+            raise ValueError(
+                f"Segment '{selected_segment}' not found. Available segments start with: {available_segments[:5]}"
+            )
+
+        segment_fit = plot_segment_fit(
+            sample_table=sample_table,
+            ci_table=ci_table,
+            alpaca_output=alpaca_output,
+            cp_table=cp_table,
+            segment=selected_segment,
+            ci_modified_report=ci_modified_report,
+        )
+        d_score = float(segment_fit.layout.meta["D_score"])
+        ci_score = int(segment_fit.layout.meta["CI_score"])
+        print(f"Selected segment: {selected_segment}")
+        print(f"D_score: {d_score:.3f}")
+        print(f"CI_score: {ci_score}")
+        segment_fit.show()
+"""
+
     cells = [
         _make_code_cell(imports_code),
         _make_code_cell(config_code),
@@ -1793,6 +2231,7 @@ else:
         _make_code_cell(heatmap_b_code),
         _make_code_cell(cn_changes_code),
         _make_code_cell(sample_cpn_code),
+        _make_code_cell(segment_fit_code),
     ]
 
     return {
