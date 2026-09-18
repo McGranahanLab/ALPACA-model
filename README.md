@@ -43,9 +43,9 @@ Repository containing core ALPACA code
          - [Reproducibility](#reproducibility)
    * [Running ALPACA in a container](#running-alpaca-in-a-container)
       + [Build](#build)
-   + [Run — open-source solvers](#run--open-source-solvers)
-   + [Run — Gurobi backend](#run--gurobi-backend)
-   + [Singularity / Apptainer](#singularity--apptainer)
+      + [Run — open-source solvers](#run--open-source-solvers)
+      + [Run — Gurobi backend](#run--gurobi-backend)
+      + [Singularity / Apptainer](#singularity--apptainer)
 
 <!-- TOC end -->
 
@@ -690,12 +690,19 @@ These options are forwarded via `--pyomo_solver_options` and are supported by Gu
 
 ### Build
 
-From the repository root:
+
+
+Pull from docker hub:
 
 ```bash
-docker build -t alpaca:latest .
+docker image pull wlippa/alpaca:1.0
 ```
 
+Or build from the repository root:
+
+```bash
+docker build -t alpaca:1.0 .
+```
 The build takes ~10–15 minutes on a typical laptop. The resulting image is roughly 4 GB (~2.5 GB of
 conda env, plus Chromium for headless PDF plot rendering).
 
@@ -707,7 +714,7 @@ The image defaults to the Pyomo + SCIP backend, which needs no licence:
 docker run --rm \
     --user "$(id -u):$(id -g)" \
     -v "$PWD:/work" \
-    alpaca:latest run \
+    wlippa/alpaca:1.0 run \
     --input_tumour_directory /work/examples/example_cohort/input/LTX0000-Tumour1 \
     --output_directory       /work/examples/example_cohort/output/LTX0000-Tumour1 \
     --plot_output_mode pdf \
@@ -728,7 +735,7 @@ docker run --rm \
     --user "$(id -u):$(id -g)" \
     -v "$PWD:/work" -w /work \
     --entrypoint /usr/local/bin/_entrypoint.sh \
-    alpaca:latest bash examples/run_example.sh
+    wlippa/alpaca:1.0 bash examples/run_example.sh
 ```
 
 ### Run — Gurobi backend
@@ -751,7 +758,7 @@ docker run --rm \
     -v "$PWD:/work" \
     -v "$HOME/gurobi.lic:/opt/gurobi/gurobi.lic:ro" \
     -e GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic \
-    alpaca:latest run \
+    wlippa/alpaca:1.0 run \
     --input_tumour_directory /work/examples/example_cohort/input/LTX0000-Tumour1 \
     --output_directory       /work/examples/example_cohort/output/LTX0000-Tumour1 \
     --solver gurobi
@@ -763,35 +770,24 @@ isolation, drop `--network host` and instead ensure the token server's host
 and port are reachable from Docker's default bridge network (may require
 firewall/DNS tweaks).
 
-#### Web License Service (WLS) / Named-User Academic
-
-Works out of the box — no hardware fingerprint, no token-server network
-requirement. Same command as above but without `--network host`.
-
 ### Singularity / Apptainer
 
 Convert the Docker image to a SIF file. From a machine that has Docker:
 
 ```bash
-# Push to a registry, then pull on the HPC:
-docker tag alpaca:latest yourorg/alpaca:latest
-docker push yourorg/alpaca:latest
 
-singularity pull alpaca.sif docker://yourorg/alpaca:latest
+singularity pull alpaca.sif docker://wlippa/alpaca:1.0
 ```
 
-Or convert locally from a running docker daemon:
-
-```bash
-singularity build alpaca.sif docker-daemon://alpaca:latest
-```
 
 Run with an open-source solver:
 
 ```bash
-singularity exec alpaca.sif alpaca run \
-    --input_tumour_directory /path/to/input \
-    --output_directory       /path/to/output \
+singularity run \
+    --bind "$PWD:/work" \
+    alpaca.sif run \
+    --input_tumour_directory /path/to/input/ \
+    --output_directory       /path/to/output/ \
     --solver pyomo --pyomo_solver scip
 ```
 
@@ -800,8 +796,11 @@ host network by default, so no extra flag is needed to reach the token
 server:
 
 ```bash
-singularity exec \
-    --bind /path/to/gurobi.lic:/opt/gurobi/gurobi.lic:ro \
-    --env GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic \
-    alpaca.sif alpaca run --solver gurobi ...
+singularity run \
+    --bind "$PWD:/work" \
+    --env GRB_LICENSE_FILE=/work/gurobi_token.lic \
+    alpaca.sif run \
+    --input_tumour_directory /path/to/input/ \
+    --output_directory       /path/to/output/ \
+    --solver gurobi
 ```
