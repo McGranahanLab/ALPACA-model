@@ -41,6 +41,11 @@ Repository containing core ALPACA code
       + [Available options](#available-options)
          - [Solver selection](#solver-selection)
          - [Reproducibility](#reproducibility)
+   * [Running ALPACA in a container](#running-alpaca-in-a-container)
+      + [Build](#build)
+      + [Run — open-source solvers](#run--open-source-solvers)
+      + [Run — Gurobi backend](#run--gurobi-backend)
+      + [Singularity / Apptainer](#singularity--apptainer)
 
 <!-- TOC end -->
 
@@ -53,6 +58,8 @@ Repository containing core ALPACA code
 ### Installation
 
 ALPACA is implemented in Python and requires Linux or macOS.
+
+We recommend running ALPACA via provided Docker container. See [Running ALPACA in a container](#running-alpaca-in-a-container) below for instructions, including conversion from Docker to Singularity/Apptainer
 
 Install ALPACA from conda (recommended) with either `mamba` or `conda`:
 
@@ -75,6 +82,8 @@ conda activate alpaca
 Optional solver note: ALPACA can use Gurobi for optimization. If you plan to use the Gurobi backend, install Gurobi and obtain a license (free for academics): [Gurobi](https://www.gurobi.com/academia/academic-program-and-licenses). You can also use the Pyomo backend with open-source MILP solvers such as CBC or GLPK (see [Solver selection](#solver-selection)).
 
 Preprocessing note: if you use ALPACA input-conversion utilities based on CONIPHER/Refphase outputs, an R installation is required for that preprocessing step.
+
+Container note: a Docker image with all supported solvers (SCIP, GLPK, and optionally Gurobi) and the R runtime pre-installed is available via the `Dockerfile` at the repository root. See [DOCKER.md](DOCKER.md) for build, run, and Singularity/HPC instructions.
 
 <!-- TOC --><a name="testing-installation"></a>
 ### Testing installation
@@ -673,3 +682,125 @@ These options are forwarded via `--pyomo_solver_options` and are supported by Gu
 2. Solver-native logs (via --solver_logs option) currently work only for Gurobi.
 3. Most solver metrics work only for Gurobi.
 4. On simulated dataset, SCIP and GLPK produce results only slightly worse to Gurobi (GLPK slightly better than SCIP), but both fail for a small number of segments (GLPK failed on 14 out of 90220 segment, SCIP failed on 490 out of 90220 segments). 
+
+
+## Running ALPACA in a container
+
+
+
+### Build
+
+
+
+Pull from docker hub:
+
+```bash
+docker image pull wlippa/alpaca:1.0
+```
+
+Or build from the repository root:
+
+```bash
+docker build -t alpaca:1.0 .
+```
+The build takes ~10–15 minutes on a typical laptop. The resulting image is roughly 4 GB (~2.5 GB of
+conda env, plus Chromium for headless PDF plot rendering).
+
+### Run — open-source solvers
+
+The image defaults to the Pyomo + SCIP backend, which needs no licence:
+
+```bash
+docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "$PWD:/work" \
+    wlippa/alpaca:1.0 run \
+    --input_tumour_directory /work/examples/example_cohort/input/LTX0000-Tumour1 \
+    --output_directory       /work/examples/example_cohort/output/LTX0000-Tumour1 \
+    --plot_output_mode pdf \
+    --genome_build hg19 \
+    --solver pyomo --pyomo_solver scip
+```
+
+`--user "$(id -u):$(id -g)"` makes the container write output files as the
+host user (the image otherwise runs as its bundled `mambauser`, uid 57439,
+which cannot write into host-owned directories).
+
+To run the full example script (which also exercises `input-conversion`,
+`ancestor-delta`, `ccd`, `wgd`, and `plot-tumour`), override the entrypoint
+to the micromamba activation shim so the conda env stays on `$PATH`:
+
+```bash
+docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -v "$PWD:/work" -w /work \
+    --entrypoint /usr/local/bin/_entrypoint.sh \
+    wlippa/alpaca:1.0 bash examples/run_example.sh
+```
+
+### Run — Gurobi backend
+
+The `gurobipy` package is installed via `environment.yml`, but Gurobi itself
+requires a licence for anything larger than its built-in demo size (~2000
+variables). Provide your licence at run time.
+
+#### Floating (token server) licence
+
+The most common academic and site-wide setup. The licence file is a small
+text file containing `TOKENSERVER=<host>` (and optionally `PORT=<port>`,
+default `41954`). Mount it into the container and make sure the container
+can reach the token server:
+
+```bash
+docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    --network host \
+    -v "$PWD:/work" \
+    -v "$HOME/gurobi.lic:/opt/gurobi/gurobi.lic:ro" \
+    -e GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic \
+    wlippa/alpaca:1.0 run \
+    --input_tumour_directory /work/examples/example_cohort/input/LTX0000-Tumour1 \
+    --output_directory       /work/examples/example_cohort/output/LTX0000-Tumour1 \
+    --solver gurobi
+```
+
+`--network host` is the simplest way to guarantee the container can reach
+the token server on the campus/lab network. If you prefer to keep container
+isolation, drop `--network host` and instead ensure the token server's host
+and port are reachable from Docker's default bridge network (may require
+firewall/DNS tweaks).
+
+### Singularity / Apptainer
+
+Convert the Docker image to a SIF file. From a machine that has Docker:
+
+```bash
+
+singularity pull alpaca.sif docker://wlippa/alpaca:1.0
+```
+
+
+Run with an open-source solver:
+
+```bash
+singularity run \
+    --bind "$PWD:/work" \
+    alpaca.sif run \
+    --input_tumour_directory /path/to/input/ \
+    --output_directory       /path/to/output/ \
+    --solver pyomo --pyomo_solver scip
+```
+
+Run with a Gurobi floating (token-server) licence — Singularity uses the
+host network by default, so no extra flag is needed to reach the token
+server:
+
+```bash
+singularity run \
+    --bind "$PWD:/work" \
+    --env GRB_LICENSE_FILE=/work/gurobi_token.lic \
+    alpaca.sif run \
+    --input_tumour_directory /path/to/input/ \
+    --output_directory       /path/to/output/ \
+    --solver gurobi
+```
