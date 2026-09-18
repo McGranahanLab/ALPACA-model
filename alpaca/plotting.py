@@ -2076,7 +2076,15 @@ def _build_plotting_notebook(plot_inputs, heatmap_palette):
     imports_code = """from pathlib import Path
 
 import pandas as pd
+import plotly.graph_objects as go
 import plotly.io as pio
+
+try:
+    import ipywidgets as widgets
+    from IPython.display import display
+except Exception:
+    widgets = None
+    display = None
 
 from alpaca.plotting import (
     load_chr_table,
@@ -2100,6 +2108,7 @@ ALPACA_OUTPUT_PATH = Path(r"{alpaca_output_literal}")
 SAMPLE_TABLE_PATH = INPUT_DIR / "ALPACA_input_table.csv"
 CI_TABLE_PATH = INPUT_DIR / "ci_table.csv"
 CI_MODIFIED_REPORT_PATH = OUTPUT_DIR / "logs_and_reports" / "ci_modified_report.csv"
+ALL_SOLUTIONS_DIR = OUTPUT_DIR / "all_solutions"
 
 HEATMAP_PALETTE = {heatmap_palette_literal}
 GENOME_BUILD = {genome_build_literal}
@@ -2124,6 +2133,16 @@ else:
 ci_modified_report = None
 if CI_MODIFIED_REPORT_PATH.exists():
     ci_modified_report = pd.read_csv(CI_MODIFIED_REPORT_PATH)
+
+all_solutions_available = ALL_SOLUTIONS_DIR.exists() and ALL_SOLUTIONS_DIR.is_dir()
+
+
+def _all_solutions_csv_path_for_segment(segment_id):
+    return ALL_SOLUTIONS_DIR / str(segment_id) / f"all_{{tumour_id}}_{{segment_id}}.csv"
+
+
+def _elbow_table_path_for_segment(segment_id):
+    return ALL_SOLUTIONS_DIR / str(segment_id) / f"{{tumour_id}}_{{segment_id}}_elbow_table.csv"
 
 mutation_table = load_mutation_table(INPUT_DIR)
 tumour_id = alpaca_output.tumour_id.iloc[0]
@@ -2191,34 +2210,228 @@ else:
     sample_cpn_B.show()
 """
 
-    segment_fit_code = """TARGET_SEGMENT = None
+    segment_selector_widget = """available_segments = []
+if sample_table is not None and not sample_table.empty:
+    available_segments = sample_table["segment"].dropna().astype(str).drop_duplicates().tolist()
 
-if sample_table is None or sample_table.empty:
+if not available_segments:
+    TARGET_SEGMENT = None
+    selected_segment = None
+    segment_selector = None
+    print("No segments available in the input table.")
+else:
+    TARGET_SEGMENT = TARGET_SEGMENT if "TARGET_SEGMENT" in globals() else None
+    default_segment = TARGET_SEGMENT if TARGET_SEGMENT in available_segments else available_segments[0]
+    selected_segment = default_segment
+
+    if widgets is None:
+        segment_selector = None
+        print("ipywidgets not available. Using selected_segment variable.")
+    else:
+        segment_selector = widgets.Dropdown(
+            options=available_segments,
+            value=default_segment,
+            description="Segment:",
+            layout=widgets.Layout(width="75%"),
+        )
+
+        def _on_segment_change(change):
+            global selected_segment
+            if change.get("name") == "value":
+                selected_segment = change["new"]
+
+        segment_selector.observe(_on_segment_change, names="value")
+        display(segment_selector)
+        selected_segment = segment_selector.value
+
+    print(f"Selected segment: {selected_segment}")
+"""
+
+    show_elbow_curve = """current_segment = segment_selector.value if "segment_selector" in globals() and segment_selector is not None else selected_segment
+
+if not all_solutions_available:
+    print("all_solutions directory not found; skipping elbow plot.")
+elif not current_segment:
+    print("No segment selected; skipping elbow plot.")
+else:
+    elbow_path = _elbow_table_path_for_segment(current_segment)
+    if not elbow_path.exists():
+        print(f"Elbow table not found for segment {current_segment}; skipping elbow plot.")
+    else:
+        elbow_df = pd.read_csv(elbow_path)
+        required = {"allowed_complexity", "D_score"}
+        if not required.issubset(elbow_df.columns):
+            print("Elbow table missing required columns; skipping elbow plot.")
+        else:
+            elbow_df = elbow_df.sort_values("allowed_complexity")
+            elbow_fig = go.Figure()
+            elbow_fig.add_trace(
+                go.Scatter(
+                    x=elbow_df["allowed_complexity"],
+                    y=elbow_df["D_score"],
+                    mode="lines+markers",
+                    name="D_score",
+                    marker=dict(size=7, color="rgb(37, 99, 235)"),
+                    line=dict(width=2, color="rgb(37, 99, 235)"),
+                )
+            )
+
+            optimal_complexity = None
+            if "selected_by_s_type" in elbow_df.columns:
+                selected_raw = pd.to_numeric(elbow_df["selected_by_s_type"], errors="coerce").dropna()
+                if not selected_raw.empty:
+                    optimal_complexity = int(selected_raw.iloc[0])
+                    elbow_fig.add_vline(
+                        x=optimal_complexity,
+                        line_width=1.5,
+                        line_dash="dash",
+                        line_color="rgb(234, 88, 12)",
+                        annotation_text=f"selected: {optimal_complexity}",
+                        annotation_position="top",
+                    )
+
+            elbow_fig.update_layout(
+                title=f"Elbow curve: {current_segment}",
+                xaxis_title="allowed_complexity",
+                yaxis_title="D_score",
+                template="plotly_white",
+                height=420,
+            )
+            elbow_fig.show()
+"""
+
+    complexity_selector_widget = """selected_complexity = None
+complexity_selector = None
+
+
+def _load_complexity_options(segment_id):
+    all_solution_path = _all_solutions_csv_path_for_segment(segment_id)
+    elbow_path = _elbow_table_path_for_segment(segment_id)
+    if not all_solution_path.exists():
+        return [], None
+
+    all_solutions_df = pd.read_csv(all_solution_path)
+    if "allowed_complexity" not in all_solutions_df.columns:
+        return [], None
+
+    complexity_values = sorted(
+        pd.to_numeric(all_solutions_df["allowed_complexity"], errors="coerce").dropna().astype(int).unique().tolist()
+    )
+    if not complexity_values:
+        return [], None
+
+    optimal_complexity = complexity_values[0]
+    if elbow_path.exists():
+        elbow_df = pd.read_csv(elbow_path)
+        if "selected_by_s_type" in elbow_df.columns:
+            selected_raw = pd.to_numeric(elbow_df["selected_by_s_type"], errors="coerce").dropna()
+            if not selected_raw.empty:
+                candidate = int(selected_raw.iloc[0])
+                if candidate in complexity_values:
+                    optimal_complexity = candidate
+    return complexity_values, optimal_complexity
+
+
+current_segment = segment_selector.value if "segment_selector" in globals() and segment_selector is not None else selected_segment
+
+if not all_solutions_available:
+    print("all_solutions directory not found; complexity selector disabled.")
+elif not current_segment:
+    print("No segment selected; complexity selector disabled.")
+else:
+    complexity_values, optimal_complexity = _load_complexity_options(current_segment)
+    if not complexity_values:
+        print(f"Complexity options unavailable for segment {current_segment}; complexity selector disabled.")
+    else:
+        if widgets is None:
+            selected_complexity = optimal_complexity
+            print("ipywidgets not available. Using selected_complexity variable.")
+            print(f"Selected complexity: {selected_complexity}")
+        else:
+            complexity_selector = widgets.Dropdown(
+                options=complexity_values,
+                value=optimal_complexity,
+                description="Complexity:",
+                layout=widgets.Layout(width="45%"),
+            )
+
+            def _on_complexity_change(change):
+                global selected_complexity
+                if change.get("name") == "value":
+                    selected_complexity = int(change["new"])
+
+            complexity_selector.observe(_on_complexity_change, names="value")
+            selected_complexity = int(complexity_selector.value)
+
+            if "segment_selector" in globals() and segment_selector is not None:
+                def _refresh_complexity(change):
+                    global selected_complexity
+                    if change.get("name") != "value":
+                        return
+                    next_segment = change["new"]
+                    next_options, next_default = _load_complexity_options(next_segment)
+                    if not next_options:
+                        complexity_selector.options = []
+                        selected_complexity = None
+                        return
+                    complexity_selector.options = next_options
+                    complexity_selector.value = next_default
+                    selected_complexity = int(next_default)
+
+                segment_selector.observe(_refresh_complexity, names="value")
+
+            display(complexity_selector)
+            print(f"Selected complexity: {selected_complexity}")
+"""
+
+    segment_fit_code = """if sample_table is None or sample_table.empty:
     print("Sample-level input table missing; skipping segment fit plot.")
 elif ci_table is None or ci_table.empty:
     print("Confidence interval table missing; skipping segment fit plot.")
 else:
-    available_segments = sample_table["segment"].dropna().astype(str).drop_duplicates().tolist()
-    if not available_segments:
+    current_segment = segment_selector.value if "segment_selector" in globals() and segment_selector is not None else selected_segment
+    current_complexity = complexity_selector.value if "complexity_selector" in globals() and complexity_selector is not None else selected_complexity
+
+    if not current_segment:
         print("No segments available in the input table; skipping segment fit plot.")
     else:
-        selected_segment = TARGET_SEGMENT or available_segments[0]
-        if selected_segment not in available_segments:
-            raise ValueError(
-                f"Segment '{selected_segment}' not found. Available segments start with: {available_segments[:5]}"
-            )
+        fit_alpaca_output = alpaca_output
+        active_complexity = None
+
+        if all_solutions_available and current_complexity is not None:
+            all_solution_path = _all_solutions_csv_path_for_segment(current_segment)
+            if all_solution_path.exists():
+                all_solutions_df = pd.read_csv(all_solution_path)
+                if "allowed_complexity" in all_solutions_df.columns:
+                    all_solutions_df["allowed_complexity"] = pd.to_numeric(
+                        all_solutions_df["allowed_complexity"], errors="coerce"
+                    )
+                    selected_rows = all_solutions_df[
+                        all_solutions_df["allowed_complexity"] == int(current_complexity)
+                    ].copy()
+                    if not selected_rows.empty:
+                        selected_rows["segment"] = current_segment
+                        selected_rows["tumour_id"] = tumour_id
+                        fit_alpaca_output = selected_rows
+                        active_complexity = int(current_complexity)
+                else:
+                    print("All-solutions file missing allowed_complexity. Falling back to optimal solution.")
 
         segment_fit = plot_segment_fit(
             sample_table=sample_table,
             ci_table=ci_table,
-            alpaca_output=alpaca_output,
+            alpaca_output=fit_alpaca_output,
             cp_table=cp_table,
-            segment=selected_segment,
+            segment=current_segment,
             ci_modified_report=ci_modified_report,
         )
         d_score = float(segment_fit.layout.meta["D_score"])
         ci_score = int(segment_fit.layout.meta["CI_score"])
-        print(f"Selected segment: {selected_segment}")
+        print(f"Selected segment: {current_segment}")
+        if active_complexity is None:
+            print("Complexity: optimal solution")
+        else:
+            print(f"Complexity: {active_complexity}")
         print(f"D_score: {d_score:.3f}")
         print(f"CI_score: {ci_score}")
         segment_fit.show()
@@ -2231,6 +2444,9 @@ else:
         _make_code_cell(heatmap_b_code),
         _make_code_cell(cn_changes_code),
         _make_code_cell(sample_cpn_code),
+        _make_code_cell(segment_selector_widget),
+        _make_code_cell(show_elbow_curve),
+        _make_code_cell(complexity_selector_widget),
         _make_code_cell(segment_fit_code),
     ]
 

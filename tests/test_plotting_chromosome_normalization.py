@@ -175,11 +175,26 @@ def test_build_plotting_notebook_appends_segment_fit_cell():
         "classic",
     )
 
-    assert len(notebook["cells"]) == 7
+    assert len(notebook["cells"]) == 10
+    segment_selector_source = "".join(notebook["cells"][6]["source"])
+    assert "widgets.Dropdown" in segment_selector_source
+    assert "selected_segment" in segment_selector_source
+
+    elbow_source = "".join(notebook["cells"][7]["source"])
+    assert "Elbow curve" in elbow_source
+    assert "_elbow_table_path_for_segment" in elbow_source
+
+    complexity_source = "".join(notebook["cells"][8]["source"])
+    assert "selected_complexity" in complexity_source
+    assert "allowed_complexity" in complexity_source
+
     final_cell_source = "".join(notebook["cells"][-1]["source"])
-    assert "TARGET_SEGMENT = None" in final_cell_source
+    assert "selected_segment" in final_cell_source
+    assert "selected_complexity" in final_cell_source
     assert "plot_segment_fit(" in final_cell_source
     assert "ci_modified_report=ci_modified_report" in final_cell_source
+    assert "fit_alpaca_output" in final_cell_source
 
     config_cell_source = "".join(notebook["cells"][1]["source"])
     assert "CI_MODIFIED_REPORT_PATH" in config_cell_source
+    assert "ALL_SOLUTIONS_DIR" in config_cell_source
