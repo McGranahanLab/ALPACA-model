@@ -71,6 +71,9 @@ class PyomoBackend(SolverBackend):
         self.homozygous_deletion_threshold = float(
             config.get("homozygous_deletion_threshold", 1)
         )
+        self.homo_del_strong_evidence_threshold = float(
+            config.get("homo_del_strong_evidence_threshold", 0.5)
+        )
         self.homo_del_size_limit = int(config.get("homo_del_size_limit", 5 * 10**7))
         self.add_path_variability_penalty_constraints_flag = bool(
             config.get("add_path_variability_penalty_constraints_flag", False)
@@ -491,13 +494,8 @@ class PyomoBackend(SolverBackend):
         assert self.model is not None
         m = self.model
         threshold = float(self.homozygous_deletion_threshold)
+        strong_threshold = float(self.homo_del_strong_evidence_threshold)
         seg_len = get_length_from_name(self.segment)
-        if seg_len >= self.homo_del_size_limit:
-            for clone in self.clone_names:
-                if clone == "diploid":
-                    continue
-                m.ci_constraints.add(m.X["A", clone] + m.X["B", clone] >= 1)
-            return
 
         samples_with_low_A = [
             sample for sample, value in self.Y["A"].items() if value < threshold
@@ -505,7 +503,26 @@ class PyomoBackend(SolverBackend):
         samples_with_low_B = [
             sample for sample, value in self.Y["B"].items() if value < threshold
         ]
-        permitted_samples = sorted(set(samples_with_low_A) & set(samples_with_low_B))
+        threshold_permitted_samples = set(samples_with_low_A) & set(samples_with_low_B)
+
+        samples_with_strong_A = [
+            sample for sample, value in self.Y["A"].items() if value < strong_threshold
+        ]
+        samples_with_strong_B = [
+            sample for sample, value in self.Y["B"].items() if value < strong_threshold
+        ]
+        strong_evidence_samples = set(samples_with_strong_A) & set(samples_with_strong_B)
+
+        size_permits_homo_del = seg_len < self.homo_del_size_limit
+        if not size_permits_homo_del and not strong_evidence_samples:
+            for clone in self.clone_names:
+                if clone == "diploid":
+                    continue
+                m.ci_constraints.add(m.X["A", clone] + m.X["B", clone] >= 1)
+            return
+
+        # Strong-evidence samples can unlock homozygous deletions on large segments.
+        permitted_samples = sorted(threshold_permitted_samples | strong_evidence_samples)
         if not permitted_samples:
             for clone in self.clone_names:
                 if clone == "diploid":
@@ -626,7 +643,8 @@ class PyomoBackend(SolverBackend):
     def _run_solver(self, stage: str):
         assert self.model is not None
         # On macOS, SCIP can be slow to respond to version queries during solver detection.
-        # Set environment variable to increase timeout for solver factory initialization.
+        # Set environment variable before SolverFactory() so executable/version probing
+        # gets the longer timeout too.
         solver_name_lower = (self.solver_name or "").lower()
         if solver_name_lower in {"scip", "scipampl"}:
             import os

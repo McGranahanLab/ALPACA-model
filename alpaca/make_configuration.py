@@ -157,6 +157,12 @@ def get_parser():
         help="Model will be allowed to postulate homozygous deletion only if width of segment is below this value.",
     )
     parser.add_argument(
+        "--homo_del_strong_evidence_threshold",
+        type=float,
+        default=0.5,
+        help="Strong-evidence threshold for overriding homozygous-deletion size limits. Homozygous deletions can be allowed on large segments when both cpnA and cpnB are below this value in at least one sample.",
+    )
+    parser.add_argument(
         "--missing_clones_inherit_from_children_flag",
         default=1,
         type=int,
@@ -330,6 +336,7 @@ def make_config(args_in):
             ),
             "homozygous_deletion_threshold": args.homozygous_deletion_threshold,
             "homo_del_size_limit": args.homo_del_size_limit,
+            "homo_del_strong_evidence_threshold": args.homo_del_strong_evidence_threshold,
             "time_limit": args.time_limit,
             "cpus": args.cpus,
             "gurobi_logs": args.gurobi_logs,

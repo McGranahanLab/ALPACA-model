@@ -32,6 +32,7 @@ class Model:
             "pyomo_solver": "scip",
             "pyomo_solver_options": {},
             "homozygous_deletion_threshold": 1,
+            "homo_del_strong_evidence_threshold": 0.5,
             "homo_del_size_limit": 5 * 10**7,
             "limit_homozygous_deletions_threshold_flag": True,
             "add_event_count_constraints_flag": True,
@@ -96,6 +97,7 @@ class Model:
             pass
         # default parameters:
         self.homozygous_deletion_threshold = 1
+        self.homo_del_strong_evidence_threshold = 0.5
         self.homo_del_size_limit = 5 * 10**7
         self.limit_homozygous_deletions_threshold_flag = bool(
             self.homozygous_deletion_threshold
@@ -938,66 +940,89 @@ class Model:
         )
 
     def limit_homozygous_deletions_threshold(self):
-        # clones can have homozygous deletion if they or their descendants are present in a sample with fractional copy number below threshold and is segment is below size limit
+        # Homozygous deletions are generally restricted by segment size, but strong
+        # dual-allele copy-number evidence can override that size restriction.
         threshold = float(self.homozygous_deletion_threshold)
+        strong_threshold = float(self.homo_del_strong_evidence_threshold)
         thr_size = int(self.homo_del_size_limit)
         seg_len = get_length_from_name(self.segment)
-        if seg_len < thr_size:
-            samples_with_low_fractional_A = [
-                k[0] for k in self.Y["A"].items() if k[1] < threshold
-            ]
-            samples_with_low_fractional_B = [
-                k[0] for k in self.Y["B"].items() if k[1] < threshold
-            ]
-            samples_where_homozygous_deletion_is_permitted = list(
-                set(
-                    [
-                        x
-                        for x in samples_with_low_fractional_A
-                        + samples_with_low_fractional_B
-                        if (x in samples_with_low_fractional_A)
-                        and (x in samples_with_low_fractional_B)
-                    ]
-                )
-            )
-            all_clones = list(self.clone_proportions.index)
-            clones_present_in_these_samples = list(
-                self.clone_proportions.index[
-                    self.clone_proportions[
-                        samples_where_homozygous_deletion_is_permitted
-                    ].sum(axis=1)
-                    > 0
-                ]
-            )
-            clones_not_present_in_these_samples = list(
-                self.clone_proportions.index[
-                    self.clone_proportions[
-                        samples_where_homozygous_deletion_is_permitted
-                    ].sum(axis=1)
-                    == 0
-                ]
-            )
-            # exclude absent clones:
-            absent_clones = (
-                self.clone_proportions.sum(axis=1)[
-                    self.clone_proportions.sum(axis=1) == 0
-                ]
-            ).index
-            clones_not_present_in_these_samples = [
-                c for c in clones_not_present_in_these_samples if c not in absent_clones
-            ]
-            for clone in clones_not_present_in_these_samples:
-                self.model.addConstr(
-                    self.X["A"][clone] + self.X["B"][clone] >= 1,
-                    name=f"no_homo_del_{clone}",
-                )
-        else:
+
+        samples_with_low_fractional_A = [
+            sample for sample, value in self.Y["A"].items() if value < threshold
+        ]
+        samples_with_low_fractional_B = [
+            sample for sample, value in self.Y["B"].items() if value < threshold
+        ]
+        threshold_permitted_samples = set(samples_with_low_fractional_A) & set(
+            samples_with_low_fractional_B
+        )
+
+        samples_with_strong_evidence_A = [
+            sample for sample, value in self.Y["A"].items() if value < strong_threshold
+        ]
+        samples_with_strong_evidence_B = [
+            sample for sample, value in self.Y["B"].items() if value < strong_threshold
+        ]
+        strong_evidence_samples = set(samples_with_strong_evidence_A) & set(
+            samples_with_strong_evidence_B
+        )
+
+        size_permits_homo_del = seg_len < thr_size
+        if not size_permits_homo_del and not strong_evidence_samples:
             self.model.addConstrs(
                 (
                     self.X["A"][clone] + self.X["B"][clone] >= 1
                     for clone in self.clone_names
                 ),
                 name="no_homo_del_{clone}",
+            )
+            return self.model
+
+        # Ensure strong-evidence samples can unlock homozygous deletions even when
+        # segment size exceeds the standard limit.
+        samples_where_homozygous_deletion_is_permitted = sorted(
+            threshold_permitted_samples | strong_evidence_samples
+        )
+
+        if not samples_where_homozygous_deletion_is_permitted:
+            self.model.addConstrs(
+                (
+                    self.X["A"][clone] + self.X["B"][clone] >= 1
+                    for clone in self.clone_names
+                ),
+                name="no_homo_del_{clone}",
+            )
+            return self.model
+
+        valid_samples = [
+            sample
+            for sample in samples_where_homozygous_deletion_is_permitted
+            if sample in self.clone_proportions.columns
+        ]
+        clones_present_in_these_samples = list(
+            self.clone_proportions.index[
+                self.clone_proportions[valid_samples].sum(axis=1) > 0
+            ]
+        )
+        clones_not_present_in_these_samples = [
+            clone
+            for clone in self.clone_proportions.index
+            if clone not in clones_present_in_these_samples
+        ]
+
+        # exclude absent clones:
+        absent_clones = (
+            self.clone_proportions.sum(axis=1)[
+                self.clone_proportions.sum(axis=1) == 0
+            ]
+        ).index
+        clones_not_present_in_these_samples = [
+            c for c in clones_not_present_in_these_samples if c not in absent_clones
+        ]
+        for clone in clones_not_present_in_these_samples:
+            self.model.addConstr(
+                self.X["A"][clone] + self.X["B"][clone] >= 1,
+                name=f"no_homo_del_{clone}",
             )
         return self.model
 
