@@ -439,6 +439,7 @@ class SegmentSolution:
         self.compare_with_true_solution: bool = False
         self.ci_table_name: str = ""
         self.output_all_solutions: bool = False
+        self.write_elbow_plots: bool = False
         self.output_model_selection_table: bool = False
         self.debug: bool = False
         self.extra_columns: list = []
@@ -1010,8 +1011,8 @@ class SegmentSolution:
             os.makedirs(all_dir, exist_ok=True)
             try:
                 self._save_all_solutions(all_dir, all_solutions)
-                elbow_path, elbow_df = self._save_elbow_table(all_dir)
-                if elbow_df is not None:
+                _, elbow_df = self._save_elbow_table(all_dir)
+                if self.write_elbow_plots and elbow_df is not None:
                     self._plot_elbow(all_dir, elbow_df)
                 # run an unconstrained (no tree_complexity_constr) max-complexity solution
                 # and save it separately so it does not interfere with elbow search

@@ -64,7 +64,7 @@ USER $MAMBA_USER
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 ENV GRB_LICENSE_FILE=/opt/gurobi/gurobi.lic
-
+ENV PATH=/opt/conda/bin:$PATH
 WORKDIR /work
 
 ENTRYPOINT ["/usr/local/bin/_entrypoint.sh", "alpaca"]

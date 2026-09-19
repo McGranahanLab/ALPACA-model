@@ -524,8 +524,13 @@ Number of available CPUs (default = 1).
 When `--output_all_solutions` is enabled, ALPACA will save every computed solution for each processed segment into an `all_solutions/<segment>` subdirectory alongside the usual optimal output. For each segment this includes:
 
 - a CSV with all model solutions (clone, pred_CN_A, pred_CN_B, complexity and an `elbow_offset` - how far from seleccted elbow each solution is),
-- an elbow table CSV annotated with which complexity was selected by the knee-finding algorithm, and
-- a simple PNG plot showing D_score vs allowed_complexity with the selected complexity marked.
+- an elbow table CSV annotated with which complexity was selected by the knee-finding algorithm.
+
+By default, elbow plot PNG files are not written. To also write elbow plots, enable:
+
+```bash
+--write_elbow_plots 1
+```
 
 Note: this option can produce a large number of files (one set per segment). We recommend using it only for selected segments when debugging or tuning model/optimization settings.
 

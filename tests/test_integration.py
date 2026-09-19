@@ -271,6 +271,30 @@ def test_output_all_solutions(tmp_path, repo_root, run_alpaca, update_golden):
             ignore_cols=VOLATILE_COLS,
             update=update_golden,
         )
+    assert not list(all_solutions_dir.glob("*_elbow_plot.png")), (
+        "Elbow plot PNG files should not be generated when --output_all_solutions is enabled."
+    )
+
+
+@pytest.mark.integration
+def test_output_all_solutions_with_elbow_plots(tmp_path, repo_root, run_alpaca):
+    input_dir = repo_root / "examples" / "example_cohort" / "input" / TUMOUR_ID
+    run_alpaca(
+        "run",
+        "--input_tumour_directory", str(input_dir),
+        "--output_directory", str(tmp_path),
+        "--output_all_solutions",
+        "--write_elbow_plots", "1",
+        "--extra_columns", "gurobi_time", "complexity", "gurobi_gap",
+        "--debug",
+        *_PYOMO_SCIP,
+    )
+
+    all_solutions_dir = tmp_path / "all_solutions"
+    assert all_solutions_dir.is_dir(), "all_solutions/ directory was not created."
+    assert list(all_solutions_dir.glob("*_elbow_plot.png")), (
+        "Elbow plot PNG files should be generated when --write_elbow_plots is enabled."
+    )
 
 
 @pytest.mark.integration

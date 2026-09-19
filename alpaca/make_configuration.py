@@ -204,6 +204,13 @@ def get_parser():
         action="store_true",
         help="If set, write all model solutions (not only the optimal) into a subdirectory of the output directory",
     )
+    parser.add_argument(
+        "--write_elbow_plots",
+        type=int,
+        choices=[0, 1],
+        default=0,
+        help="Controls whether elbow plot PNG files are written when --output_all_solutions is enabled (0=off, 1=on).",
+    )
 
     parser.add_argument(
         "--complexity",
@@ -357,6 +364,7 @@ def make_config(args_in):
         "ci_table_name": args.ci_table_name,
         "debug": args.debug,
         "output_all_solutions": args.output_all_solutions,
+        "write_elbow_plots": bool(args.write_elbow_plots),
         "env": ENV,
         "output_directory": args.output_directory,
         "min_ci": args.min_ci,
