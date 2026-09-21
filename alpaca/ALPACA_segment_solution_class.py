@@ -825,6 +825,9 @@ class SegmentSolution:
                 elbow_df[k] = v
             all_dir_seg = self._get_all_solutions_subdir_name(all_dir)
             elbow_output_path = os.path.join(all_dir_seg, f"{self.tumour_id}_{self.segment}_elbow_table.csv")
+            # add segment and tumour_id
+            elbow_df["segment"] = self.segment if hasattr(self, "segment") else None
+            elbow_df["tumour_id"] = self.tumour_id if hasattr(self, "tumour_id") else None
             elbow_df.to_csv(elbow_output_path, index=False)
             return elbow_output_path, elbow_df
         except Exception:
