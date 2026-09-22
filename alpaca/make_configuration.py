@@ -206,10 +206,9 @@ def get_parser():
     )
     parser.add_argument(
         "--write_elbow_plots",
-        type=int,
-        choices=[0, 1],
-        default=0,
-        help="Controls whether elbow plot PNG files are written when --output_all_solutions is enabled (0=off, 1=on).",
+        default=False,
+        action="store_true",
+        help="Controls whether elbow plot PNG files are written when --output_all_solutions is enabled.",
     )
 
     parser.add_argument(

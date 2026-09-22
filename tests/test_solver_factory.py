@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import pytest
 
@@ -62,3 +64,36 @@ def test_create_solver_backend_unknown():
     inputs = _make_minimal_inputs()
     with pytest.raises(SolverFactoryError):
         create_solver_backend("unknown", inputs, {})
+
+
+def test_pyomo_backend_raises_scip_probe_timeout(monkeypatch):
+    inputs = _make_minimal_inputs()
+    monkeypatch.delenv("PYOMO_SOLVER_EXEC_TIMEOUT", raising=False)
+
+    backend = PyomoBackend(
+        inputs,
+        {
+            "solver": "pyomo",
+            "pyomo_solver": "scip",
+            "minimise_events_to_diploid": False,
+        },
+    )
+
+    assert backend.solver_name == "scip"
+    assert os.environ["PYOMO_SOLVER_EXEC_TIMEOUT"] == "30"
+
+
+def test_pyomo_backend_keeps_existing_longer_scip_timeout(monkeypatch):
+    inputs = _make_minimal_inputs()
+    monkeypatch.setenv("PYOMO_SOLVER_EXEC_TIMEOUT", "45")
+
+    PyomoBackend(
+        inputs,
+        {
+            "solver": "pyomo",
+            "pyomo_solver": "scipampl",
+            "minimise_events_to_diploid": False,
+        },
+    )
+
+    assert os.environ["PYOMO_SOLVER_EXEC_TIMEOUT"] == "45"

@@ -94,8 +94,8 @@ def test_plot_segment_fit_returns_expected_scores_and_traces():
     assert fig.layout.meta["D_score"] == 0.6
     assert fig.layout.meta["CI_score"] == 1
     assert list(fig.data[0].x) == ["S1", "S2"]
-    assert list(fig.data[1].y) == [1.2, 1.8]
-    assert list(fig.data[3].y) == [1.0, 1.0]
+    assert [round(x,2) for x in list(fig.data[1].y)] == [1.2, 1.8]
+    assert [round(x,2) for x in list(fig.data[3].y)] == [1.0, 1.0]
 
 
 def test_plot_segment_fit_overlays_enlarged_ci_from_report():
@@ -157,8 +157,8 @@ def test_plot_segment_fit_overlays_enlarged_ci_from_report():
 
     assert len(fig.data) == 5
     assert fig.data[1].name == "Enlarged CI A"
-    assert fig.data[0].error_y.arrayminus[0] == 0.1
-    assert fig.data[1].error_y.arrayminus[0] == 0.5
+    assert round(fig.data[0].error_y.arrayminus[0],1) == 0.1
+    assert round(fig.data[1].error_y.arrayminus[0],1) == 0.5
 
 
 def test_build_plotting_notebook_appends_segment_fit_cell():

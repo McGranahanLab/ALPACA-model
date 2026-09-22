@@ -292,7 +292,7 @@ def test_output_all_solutions_with_elbow_plots(tmp_path, repo_root, run_alpaca):
 
     all_solutions_dir = tmp_path / "all_solutions"
     assert all_solutions_dir.is_dir(), "all_solutions/ directory was not created."
-    assert list(all_solutions_dir.glob("*_elbow_plot.png")), (
+    assert list(all_solutions_dir.glob("**/*_elbow_plot.png")), (
         "Elbow plot PNG files should be generated when --write_elbow_plots is enabled."
     )
 

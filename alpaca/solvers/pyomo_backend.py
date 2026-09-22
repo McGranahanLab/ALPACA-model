@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import Dict, List, Tuple
 
 import pandas as pd
@@ -22,6 +23,7 @@ class PyomoBackend(SolverBackend):
     """Pyomo-based solver backend for ALPACA."""
 
     name = "pyomo"
+    _SCIP_EXEC_TIMEOUT_SECONDS = 30
 
     def __init__(self, inputs: ModelInputs, config: Dict[str, any]):
         super().__init__(inputs, config)
@@ -90,7 +92,24 @@ class PyomoBackend(SolverBackend):
         self.allowed_tree_complexity = self.allowed_tree_complexity_default
         self.gap_status: Dict[str, float] = {}
         self.last_runtime: float | None = None
+        self._configure_scip_timeout()
         self._init_internal_structures()
+
+    def _configure_scip_timeout(self) -> None:
+        solver_name_lower = (self.solver_name or "").lower()
+        if solver_name_lower not in {"scip", "scipampl"}:
+            return
+
+        timeout_key = "PYOMO_SOLVER_EXEC_TIMEOUT"
+        timeout_value = self._SCIP_EXEC_TIMEOUT_SECONDS
+        current_timeout = os.environ.get(timeout_key)
+        try:
+            current_timeout_value = int(current_timeout) if current_timeout is not None else None
+        except (TypeError, ValueError):
+            current_timeout_value = None
+
+        if current_timeout_value is None or current_timeout_value < timeout_value:
+            os.environ[timeout_key] = str(timeout_value)
 
     def _init_internal_structures(self) -> None:
         self.alleles = ["A", "B"]
@@ -642,15 +661,7 @@ class PyomoBackend(SolverBackend):
     # ------------------------------------------------------------------
     def _run_solver(self, stage: str):
         assert self.model is not None
-        # On macOS, SCIP can be slow to respond to version queries during solver detection.
-        # Set environment variable before SolverFactory() so executable/version probing
-        # gets the longer timeout too.
-        solver_name_lower = (self.solver_name or "").lower()
-        if solver_name_lower in {"scip", "scipampl"}:
-            import os
-
-            # Set environment variable for Pyomo's subprocess timeout handling
-            os.environ.setdefault("PYOMO_SOLVER_EXEC_TIMEOUT", "30")
+        self._configure_scip_timeout()
 
         solver = pyo.SolverFactory(self.solver_name)
         options = self._solver_options()
