@@ -828,6 +828,7 @@ class SegmentSolution:
             # add segment and tumour_id
             elbow_df["segment"] = self.segment if hasattr(self, "segment") else None
             elbow_df["tumour_id"] = self.tumour_id if hasattr(self, "tumour_id") else None
+            elbow_df["optimal_complexity"] = self.optimal_solution['complexity'].unique()[0]
             elbow_df.to_csv(elbow_output_path, index=False)
             return elbow_output_path, elbow_df
         except Exception:

@@ -31,7 +31,10 @@ alpaca run \
     --input_tumour_directory "${input_tumour_directory}" \
     --output_directory "${output_directory}" \
     --plot_output_mode pdf \
-    --genome_build hg19
+    --genome_build hg19 \
+    --solver gurobi \
+    --debug \
+    --output_all_solutions
 
 # get cn change to ancestor:
 alpaca ancestor-delta \
