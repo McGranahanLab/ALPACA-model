@@ -85,6 +85,17 @@ def get_parser():
         help="Reference genome build for chromosome lengths when plotting (default: hg19).",
     )
     parser.add_argument(
+        "--genome_cache_dir",
+        type=str,
+        default=None,
+        help=(
+            "Optional path to a pre-populated genome cache directory (defaults to "
+            "~/.cache/alpaca/genomes or the ALPACA_GENOME_CACHE_DIR env var). Use this to "
+            "point at a host-mounted cache when running in containers (e.g. Singularity) "
+            "without network access, avoiding repeated chromosome table downloads."
+        ),
+    )
+    parser.add_argument(
         "--gurobi_logs",
         type=str,
         default="",
@@ -370,6 +381,7 @@ def make_config(args_in):
         "extra_columns": args.extra_columns,
         "plot_output_mode": args.plot_output_mode,
         "genome_build": args.genome_build,
+        "genome_cache_dir": args.genome_cache_dir,
     }
     if args.mode == "tumour":
         preprocessing_config["input_tumour_directory"] = args.input_tumour_directory

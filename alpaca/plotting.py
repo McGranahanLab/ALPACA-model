@@ -133,12 +133,17 @@ def build_copy_number_palette(max_state, palette_name=_DEFAULT_HEATMAP_PALETTE):
     return palette
 
 
-def load_chr_table(custom_path=None, genome_build=_DEFAULT_GENOME_BUILD):
-    """Load chromosome lengths from a user path or the cached genome build."""
+def load_chr_table(custom_path=None, genome_build=_DEFAULT_GENOME_BUILD, cache_dir=None):
+    """Load chromosome lengths from a user path or the cached genome build.
+
+    cache_dir points at a pre-populated genome cache (e.g. bind-mounted from
+    the host into a Singularity container) so the table can be reused instead
+    of triggering a download, which typically has no network access.
+    """
     if custom_path:
         return get_chr_table(custom_path)
 
-    table_path = ensure_chr_table(genome_build)
+    table_path = ensure_chr_table(genome_build, cache_dir=cache_dir)
     return get_chr_table(table_path)
 
 
@@ -1921,6 +1926,7 @@ def _load_plot_inputs(
     chr_table_override=None,
     mutation_table_override=None,
     genome_build=_DEFAULT_GENOME_BUILD,
+    genome_cache_dir=None,
 ):
     input_dir = Path(tumour_input_dir).expanduser().resolve()
     output_dir = Path(tumour_output_dir).expanduser().resolve()
@@ -1949,7 +1955,9 @@ def _load_plot_inputs(
             f"Missing tumour tree. Expected {tree_json_path} or {tree_json_path.with_suffix('.nwk')}"
         )
 
-    chr_table = load_chr_table(chr_table_override, genome_build=genome_build)
+    chr_table = load_chr_table(
+        chr_table_override, genome_build=genome_build, cache_dir=genome_cache_dir
+    )
     tree = read_tree_json(str(tree_json_path))
     alpaca_output = pd.read_csv(alpaca_path)
     if alpaca_output.empty:
@@ -1985,6 +1993,7 @@ def _load_plot_inputs(
         "driver_mutations": driver_mutations,
         "tumour_id": tumour_id,
         "genome_build": genome_build,
+        "genome_cache_dir": str(genome_cache_dir) if genome_cache_dir else None,
     }
 
 
@@ -2072,6 +2081,7 @@ def _build_plotting_notebook(plot_inputs, heatmap_palette):
     genome_build_literal = json.dumps(
         plot_inputs.get("genome_build", _DEFAULT_GENOME_BUILD)
     )
+    genome_cache_dir_literal = json.dumps(plot_inputs.get("genome_cache_dir"))
 
     imports_code = """from pathlib import Path
 
@@ -2112,8 +2122,9 @@ ALL_SOLUTIONS_DIR = OUTPUT_DIR / "all_solutions"
 
 HEATMAP_PALETTE = {heatmap_palette_literal}
 GENOME_BUILD = {genome_build_literal}
+GENOME_CACHE_DIR = {genome_cache_dir_literal}
 
-chr_table = load_chr_table(genome_build=GENOME_BUILD)
+chr_table = load_chr_table(genome_build=GENOME_BUILD, cache_dir=GENOME_CACHE_DIR)
 tree = read_tree_json(str(TREE_PATH))
 alpaca_output = pd.read_csv(ALPACA_OUTPUT_PATH)
 cp_table = pd.read_csv(CP_TABLE_PATH).set_index("clone")
@@ -2489,6 +2500,7 @@ def export_plot_outputs(
     notebook_name=None,
     heatmap_palette=_DEFAULT_HEATMAP_PALETTE,
     genome_build=_DEFAULT_GENOME_BUILD,
+    genome_cache_dir=None,
 ):
     """Generate ALPACA visualisations as PDFs, notebooks, or skip entirely.
 
@@ -2496,6 +2508,9 @@ def export_plot_outputs(
     copy-number heatmap colouring without re-implementing plotting logic. The
     genome_build parameter controls which UCSC chromosome lengths table to use
     when a custom --chr-table path is not provided.
+    genome_cache_dir points at a pre-populated genome cache directory (e.g.
+    bind-mounted from the host into a Singularity container) so chromosome
+    length tables are reused instead of triggering a network download.
     """
 
     normalized_mode = (mode or "notebook").lower()
@@ -2515,6 +2530,7 @@ def export_plot_outputs(
         chr_table_override=chr_table_override,
         mutation_table_override=mutation_table_override,
         genome_build=genome_build,
+        genome_cache_dir=genome_cache_dir,
     )
 
     notebook_target = notebook_name or f"{plot_inputs['tumour_id']}_plots.ipynb"
@@ -2582,6 +2598,17 @@ def main():
         choices=SUPPORTED_GENOME_BUILDS,
         help="Genome reference build used for chromosome lengths when plotting (default: hg19).",
     )
+    parser.add_argument(
+        "--genome_cache_dir",
+        dest="genome_cache_dir",
+        type=str,
+        default=None,
+        help=(
+            "Optional path to a pre-populated genome cache directory (defaults to "
+            "~/.cache/alpaca/genomes or the ALPACA_GENOME_CACHE_DIR env var). Use this to "
+            "point at a host-mounted cache when running in containers without network access."
+        ),
+    )
     args = parser.parse_args()
     output_directory = Path(args.output_directory).expanduser().resolve()
     input_directory = Path(args.input_directory).expanduser().resolve()
@@ -2597,6 +2624,7 @@ def main():
         mutation_table_override=args.mutation_table,
         heatmap_palette=args.heatmap_palette,
         genome_build=args.genome_build,
+        genome_cache_dir=args.genome_cache_dir,
     )
 
 

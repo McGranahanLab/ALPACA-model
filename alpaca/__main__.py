@@ -223,6 +223,7 @@ def run_alpaca():
             plot_mode = config["preprocessing_config"].get("plot_output_mode", "notebook")
             heatmap_palette = config["preprocessing_config"].get("heatmap_palette")
             genome_build = config["preprocessing_config"].get("genome_build", "hg19")
+            genome_cache_dir = config["preprocessing_config"].get("genome_cache_dir")
             if plot_mode != "none":
                 from alpaca.plotting import export_plot_outputs
 
@@ -235,6 +236,7 @@ def run_alpaca():
                         alpaca_output_path=Path(concatenated_output_path),
                         heatmap_palette=heatmap_palette,
                         genome_build=genome_build,
+                        genome_cache_dir=genome_cache_dir,
                     )
                     logger.info(
                         f"Generated {plot_mode} plot artefacts in {output_dir}"

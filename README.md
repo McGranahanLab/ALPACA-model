@@ -475,6 +475,8 @@ ALPACA-model/examples/example_cohort/output/LTX0000-Tumour1
 
 Heatmap visualisations rely on chromosome length tables that match the genome build used to generate your tumour segments. ALPACA now downloads these tables from UCSC automatically and caches them under `~/.cache/alpaca/genomes`. Supply `--genome_build {hg19|hg38}` whenever plotting is enabled (the flag defaults to `hg19` for backwards compatibility, but you should set `--genome_build hg38` for GRCh38 inputs).
 
+When running inside a container (e.g. Nextflow with a Singularity image), the container typically has no outbound network access and `$HOME` does not point at a location with a pre-existing cache, so the automatic download will fail. Use `--genome_cache_dir /path/to/cache` (or set the `ALPACA_GENOME_CACHE_DIR` environment variable) to point ALPACA at a genome cache directory bind-mounted from the host — for example, run `alpaca plot-tumour ... --genome_cache_dir ~/.cache/alpaca/genomes` once outside the container to populate it, then bind-mount that same directory into the container (e.g. `singularity run -B ~/.cache/alpaca/genomes:/cache/alpaca/genomes ... --genome_cache_dir /cache/alpaca/genomes`) so no download is attempted at runtime.
+
 If you disabled plotting during `alpaca run` (for example with `--plot_output_mode none`), you can regenerate notebooks or PDFs later via:
 
 ```bash
@@ -482,7 +484,8 @@ alpaca plot-tumour \
    --input_directory "${input_tumour_directory}" \
    --output_directory "${output_directory}" \
    --plot_output_mode pdf \
-   --genome_build hg38
+    --genome_build hg38 \
+    --genome_cache_dir /path/to/cache
 ```
 
 The `plot-tumour` helper accepts the same `--chr-table` / `--mutation-table` overrides as the main run, so you can point it at a pre-downloaded chromosome table when working offline.

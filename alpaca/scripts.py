@@ -410,6 +410,17 @@ def run_plot_tumour():
         choices=SUPPORTED_GENOME_BUILDS,
         help="Reference genome build for chromosome lengths (default: hg19).",
     )
+    parser.add_argument(
+        "--genome_cache_dir",
+        dest="genome_cache_dir",
+        default=None,
+        help=(
+            "Optional path to a pre-populated genome cache directory (defaults to "
+            "~/.cache/alpaca/genomes or the ALPACA_GENOME_CACHE_DIR env var). Use this to "
+            "point at a host-mounted cache when running in containers (e.g. Singularity) "
+            "without network access, avoiding repeated downloads."
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -454,6 +465,7 @@ def run_plot_tumour():
             notebook_name=args.notebook_name,
             heatmap_palette=args.heatmap_palette,
             genome_build=args.genome_build,
+            genome_cache_dir=args.genome_cache_dir,
         )
     except Exception as exc:
         logger.exception(f"Failed to generate plots: {exc}")
