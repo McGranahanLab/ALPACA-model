@@ -27,7 +27,12 @@ def ensure_chr_table(genome_build: str, cache_dir: Optional[str | Path] = None) 
 
     Returns the path to a CSV with columns ['chr', 'len'] restricted to
     chr1-22, chrX, chrY. Data are sourced from UCSC chrom.sizes files and
-    cached under ~/.cache/alpaca/genomes by default.
+    cached under ~/.cache/alpaca/genomes by default. Pass ``cache_dir`` (or set
+    the ALPACA_GENOME_CACHE_DIR environment variable) to use a pre-populated,
+    host-mounted cache directory instead — this might be required when running
+    inside containers (e.g. Singularity) that have no outbound
+    network access, since $HOME inside the container will not contain a
+    previously downloaded table and the download would otherwise fail.
     """
 
     build = (genome_build or "").lower()
@@ -36,6 +41,7 @@ def ensure_chr_table(genome_build: str, cache_dir: Optional[str | Path] = None) 
             f"Unsupported genome build '{genome_build}'. Choose one of {sorted(_GENOME_LENGTH_SOURCES)}."
         )
 
+    cache_dir = cache_dir or os.environ.get("ALPACA_GENOME_CACHE_DIR")
     cache_root = Path(cache_dir).expanduser().resolve() if cache_dir else _DEFAULT_GENOME_CACHE
     cache_root.mkdir(parents=True, exist_ok=True)
     cache_file = cache_root / f"{build}_chrom_lengths.csv"
