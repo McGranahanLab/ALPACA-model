@@ -42,6 +42,8 @@ def ensure_chr_table(genome_build: str, cache_dir: Optional[str | Path] = None) 
         )
 
     cache_dir = cache_dir or os.environ.get("ALPACA_GENOME_CACHE_DIR")
+    if not cache_dir and os.environ.get("ALPACA_CACHE_DIR"):
+        cache_dir = Path(os.environ["ALPACA_CACHE_DIR"]) / "genomes"
     cache_root = Path(cache_dir).expanduser().resolve() if cache_dir else _DEFAULT_GENOME_CACHE
     cache_root.mkdir(parents=True, exist_ok=True)
     cache_file = cache_root / f"{build}_chrom_lengths.csv"
