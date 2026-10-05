@@ -19,14 +19,16 @@ def _is_writable_dir(path):
         return False
 
 
-def _configure_writable_caches():
+def configure_writable_caches(cache_dir=None):
     """Point matplotlib/fontconfig caches at a writable dir (read-only $HOME in containers).
 
-    Uses ALPACA_CACHE_DIR if set; otherwise only overrides when the default location is unwritable.
+    Uses ``cache_dir`` or ALPACA_CACHE_DIR when supplied; otherwise only overrides
+    defaults when their locations are unwritable.
     """
-    explicit = _os.environ.get("ALPACA_CACHE_DIR")
+    explicit = cache_dir or _os.environ.get("ALPACA_CACHE_DIR")
     if explicit:
         base = _os.path.abspath(_os.path.expanduser(explicit))
+        _os.environ["ALPACA_CACHE_DIR"] = base
     else:
         uid = _os.getuid() if hasattr(_os, "getuid") else "user"
         base = _os.path.join(_tempfile.gettempdir(), f"alpaca-cache-{uid}")
@@ -37,7 +39,11 @@ def _configure_writable_caches():
         _os.environ.get("XDG_CONFIG_HOME") or _os.path.join(home, ".config"), "matplotlib"
     )
 
-    if not _os.environ.get("MPLCONFIGDIR") and (explicit or not _is_writable_dir(mpl_dir)):
+    if explicit:
+        target = _os.path.join(base, "matplotlib")
+        if _is_writable_dir(target):
+            _os.environ["MPLCONFIGDIR"] = target
+    elif not _os.environ.get("MPLCONFIGDIR") and not _is_writable_dir(mpl_dir):
         target = _os.path.join(base, "matplotlib")
         if _is_writable_dir(target):
             _os.environ["MPLCONFIGDIR"] = target
@@ -47,6 +53,6 @@ def _configure_writable_caches():
             _os.environ["XDG_CACHE_HOME"] = target
 
 
-_configure_writable_caches()
+configure_writable_caches()
 
-__all__ = ["version"]
+__all__ = ["version", "configure_writable_caches"]

@@ -96,6 +96,15 @@ def get_parser():
         ),
     )
     parser.add_argument(
+        "--alpaca_cache_dir",
+        type=str,
+        default=None,
+        help=(
+            "Writable cache directory for Matplotlib and fontconfig (and genomes unless "
+            "--genome_cache_dir is set). Useful when the container home directory is read-only."
+        ),
+    )
+    parser.add_argument(
         "--gurobi_logs",
         type=str,
         default="",
@@ -320,6 +329,9 @@ def make_config(args_in):
         args_list = args_in
     args, remaining_args = parser.parse_known_args(args_list)
     validate_args(args)
+    from alpaca import configure_writable_caches
+
+    configure_writable_caches(args.alpaca_cache_dir)
     pyomo_solver_options = _parse_solver_option_list(args.pyomo_solver_options)
     # If there are any unknown args left over, fail fast (unless running in dev
     # mode where remaining args are forwarded to dev.parse_optional_args()).
@@ -382,6 +394,7 @@ def make_config(args_in):
         "plot_output_mode": args.plot_output_mode,
         "genome_build": args.genome_build,
         "genome_cache_dir": args.genome_cache_dir,
+        "alpaca_cache_dir": args.alpaca_cache_dir,
     }
     if args.mode == "tumour":
         preprocessing_config["input_tumour_directory"] = args.input_tumour_directory

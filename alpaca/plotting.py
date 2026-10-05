@@ -1927,6 +1927,7 @@ def _load_plot_inputs(
     mutation_table_override=None,
     genome_build=_DEFAULT_GENOME_BUILD,
     genome_cache_dir=None,
+    alpaca_cache_dir=None,
 ):
     input_dir = Path(tumour_input_dir).expanduser().resolve()
     output_dir = Path(tumour_output_dir).expanduser().resolve()
@@ -1994,6 +1995,7 @@ def _load_plot_inputs(
         "tumour_id": tumour_id,
         "genome_build": genome_build,
         "genome_cache_dir": str(genome_cache_dir) if genome_cache_dir else None,
+        "alpaca_cache_dir": str(alpaca_cache_dir) if alpaca_cache_dir else None,
     }
 
 
@@ -2082,8 +2084,17 @@ def _build_plotting_notebook(plot_inputs, heatmap_palette):
         plot_inputs.get("genome_build", _DEFAULT_GENOME_BUILD)
     )
     genome_cache_dir_literal = json.dumps(plot_inputs.get("genome_cache_dir"))
+    alpaca_cache_dir_literal = json.dumps(plot_inputs.get("alpaca_cache_dir"))
 
-    imports_code = """from pathlib import Path
+    imports_code = f"""import os
+
+ALPACA_CACHE_DIR = {alpaca_cache_dir_literal}
+if ALPACA_CACHE_DIR:
+    from alpaca import configure_writable_caches
+
+    configure_writable_caches(ALPACA_CACHE_DIR)
+
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -2501,6 +2512,7 @@ def export_plot_outputs(
     heatmap_palette=_DEFAULT_HEATMAP_PALETTE,
     genome_build=_DEFAULT_GENOME_BUILD,
     genome_cache_dir=None,
+    alpaca_cache_dir=None,
 ):
     """Generate ALPACA visualisations as PDFs, notebooks, or skip entirely.
 
@@ -2511,6 +2523,7 @@ def export_plot_outputs(
     genome_cache_dir points at a pre-populated genome cache directory (e.g.
     bind-mounted from the host into a Singularity container) so chromosome
     length tables are reused instead of triggering a network download.
+    alpaca_cache_dir selects writable Matplotlib and fontconfig cache locations.
     """
 
     normalized_mode = (mode or "notebook").lower()
@@ -2531,6 +2544,7 @@ def export_plot_outputs(
         mutation_table_override=mutation_table_override,
         genome_build=genome_build,
         genome_cache_dir=genome_cache_dir,
+        alpaca_cache_dir=alpaca_cache_dir,
     )
 
     notebook_target = notebook_name or f"{plot_inputs['tumour_id']}_plots.ipynb"

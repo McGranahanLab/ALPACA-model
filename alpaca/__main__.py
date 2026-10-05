@@ -80,7 +80,6 @@ def run_alpaca():
     from tqdm import tqdm
     from io import StringIO
 
-    from alpaca.ALPACA_segment_solution_class import SegmentSolution
     from alpaca.utils import (
         print_logo,
         concatenate_output,
@@ -100,6 +99,8 @@ def run_alpaca():
     logger = create_logger(name="ALPACA", log_dir="logs")
     logger.info("Starting ALPACA")
     config = make_config(sys.argv[1:])
+    from alpaca.ALPACA_segment_solution_class import SegmentSolution
+
     debug = config["preprocessing_config"]["debug"]
     output_all = config["preprocessing_config"].get("output_all_solutions", False)
     if output_all:
@@ -109,7 +110,9 @@ def run_alpaca():
             os.makedirs(all_solutions_dir, exist_ok=True)
             logger.info(f"Created directory for all solutions: {all_solutions_dir}")
         except Exception as e:
-            logger.error(f"Failed to create all_solutions directory {all_solutions_dir}: {e}")
+            logger.error(
+                f"Failed to create all_solutions directory {all_solutions_dir}: {e}"
+            )
             raise
     if debug:
         logger.setLevel("DEBUG")
@@ -117,8 +120,12 @@ def run_alpaca():
         # to enable testing model with a provided solution, check if the solution dataframe is provided.
         # we expect only single segmnt there, so throw an error if there are more.
         # then, modify 'input_files' to contain only this single segment file.
-        if config["preprocessing_config"].get("test_with_provided_solution") is not None:
+        if (
+            config["preprocessing_config"].get("test_with_provided_solution")
+            is not None
+        ):
             import pandas as pd
+
             provided_solution = pd.read_csv(
                 config["preprocessing_config"]["test_with_provided_solution"]
             )
@@ -127,8 +134,12 @@ def run_alpaca():
                 raise ValueError(
                     "When using 'test_with_provided_solution', the provided solution file must contain only a single segment."
                 )
-            config["preprocessing_config"]["input_files"] = [x for x in config["preprocessing_config"]["input_files"] if segments[0] in os.path.basename(x)]
-            
+            config["preprocessing_config"]["input_files"] = [
+                x
+                for x in config["preprocessing_config"]["input_files"]
+                if segments[0] in os.path.basename(x)
+            ]
+
     # determine running mode:
     # if 'tumour', expect single file with all the segments and output a single file
     # if 'segment' expect array of files to segment files (can be from different tumours) and create separate outputs for each segment
@@ -202,32 +213,60 @@ def run_alpaca():
             )
             # parse and combine reports:
             output_dir = SS.config["preprocessing_config"]["output_directory"]
-            process_ci_reports(output_dir, delete=True, outpath=output_dir + "/ci_modified_report.csv")
-            process_monoclonal_reports(output_dir, delete=True, outpath=output_dir + "/monoclonal_samples_report.csv")
-            process_run_summary_reports(output_dir, delete=True, outpath=output_dir + "/run_gap_summary.csv")
-            process_infeasibility_reports(output_dir, delete=True, outpath=output_dir + "/infeasibility_report.csv")
+            process_ci_reports(
+                output_dir, delete=True, outpath=output_dir + "/ci_modified_report.csv"
+            )
+            process_monoclonal_reports(
+                output_dir,
+                delete=True,
+                outpath=output_dir + "/monoclonal_samples_report.csv",
+            )
+            process_run_summary_reports(
+                output_dir, delete=True, outpath=output_dir + "/run_gap_summary.csv"
+            )
+            process_infeasibility_reports(
+                output_dir,
+                delete=True,
+                outpath=output_dir + "/infeasibility_report.csv",
+            )
             # cleanup: move all the logs, reports and summaries to a separate folder:
             logs_and_reports_dir = os.path.join(output_dir, "logs_and_reports")
             try:
                 import shutil
+
                 os.makedirs(logs_and_reports_dir, exist_ok=True)
                 for item in os.listdir(output_dir):
                     if item == "logs_and_reports":
                         continue
-                    if "_log_" in item or "report" in item or item.endswith("_summary.csv"):
-                        shutil.move(os.path.join(output_dir, item), os.path.join(logs_and_reports_dir, item))
+                    if (
+                        "_log_" in item
+                        or "report" in item
+                        or item.endswith("_summary.csv")
+                    ):
+                        shutil.move(
+                            os.path.join(output_dir, item),
+                            os.path.join(logs_and_reports_dir, item),
+                        )
                 logger.info(f"Moved logs and reports to {logs_and_reports_dir}")
             except Exception as e:
-                logger.error(f"Failed to move logs and reports to {logs_and_reports_dir}: {e}")
+                logger.error(
+                    f"Failed to move logs and reports to {logs_and_reports_dir}: {e}"
+                )
                 raise
-            plot_mode = config["preprocessing_config"].get("plot_output_mode", "notebook")
+            plot_mode = config["preprocessing_config"].get(
+                "plot_output_mode", "notebook"
+            )
             heatmap_palette = config["preprocessing_config"].get("heatmap_palette")
             genome_build = config["preprocessing_config"].get("genome_build", "hg19")
             genome_cache_dir = config["preprocessing_config"].get("genome_cache_dir")
+            alpaca_cache_dir = config["preprocessing_config"].get("alpaca_cache_dir")
             if plot_mode != "none":
                 from alpaca.plotting import export_plot_outputs
 
-                tumour_input_dir = config["preprocessing_config"].get("input_tumour_directory") or SS.tumour_dir
+                tumour_input_dir = (
+                    config["preprocessing_config"].get("input_tumour_directory")
+                    or SS.tumour_dir
+                )
                 try:
                     export_plot_outputs(
                         mode=plot_mode,
@@ -237,12 +276,13 @@ def run_alpaca():
                         heatmap_palette=heatmap_palette,
                         genome_build=genome_build,
                         genome_cache_dir=genome_cache_dir,
+                        alpaca_cache_dir=alpaca_cache_dir,
                     )
-                    logger.info(
-                        f"Generated {plot_mode} plot artefacts in {output_dir}"
-                    )
+                    logger.info(f"Generated {plot_mode} plot artefacts in {output_dir}")
                 except Exception as plot_error:
-                    logger.error(f"Failed to generate plots ({plot_mode}): {plot_error}")
+                    logger.error(
+                        f"Failed to generate plots ({plot_mode}): {plot_error}"
+                    )
                     if debug:
                         raise
             logger.info(

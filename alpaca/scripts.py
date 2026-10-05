@@ -339,13 +339,6 @@ def run_get_scores():
 
 def run_plot_tumour():
     """CLI wrapper for generating plots/notebooks once ALPACA outputs exist."""
-    from alpaca.plotting import (
-        export_plot_outputs,
-        _DEFAULT_HEATMAP_PALETTE,
-        _SUPPORTED_HEATMAP_CHOICES,
-        _DEFAULT_GENOME_BUILD,
-    )
-
     logger = create_logger(name="plotting", log_dir="logs")
     parser = argparse.ArgumentParser(
         description="Generate ALPACA heatmap plots (PDF or notebook) from existing outputs."
@@ -399,14 +392,13 @@ def run_plot_tumour():
     parser.add_argument(
         "--heatmap_palette",
         dest="heatmap_palette",
-        default=_DEFAULT_HEATMAP_PALETTE,
-        choices=_SUPPORTED_HEATMAP_CHOICES,
+        default="classic",
         help="Colour palette for copy-number gains (>=2 states).",
     )
     parser.add_argument(
         "--genome_build",
         dest="genome_build",
-        default=_DEFAULT_GENOME_BUILD,
+        default="hg19",
         choices=SUPPORTED_GENOME_BUILDS,
         help="Reference genome build for chromosome lengths (default: hg19).",
     )
@@ -421,8 +413,27 @@ def run_plot_tumour():
             "without network access, avoiding repeated downloads."
         ),
     )
+    parser.add_argument(
+        "--alpaca_cache_dir",
+        dest="alpaca_cache_dir",
+        default=None,
+        help=(
+            "Writable cache directory for Matplotlib and fontconfig (and genomes unless "
+            "--genome_cache_dir is set). Useful when the container home directory is read-only."
+        ),
+    )
 
     args = parser.parse_args()
+    from alpaca import configure_writable_caches
+
+    configure_writable_caches(args.alpaca_cache_dir)
+    from alpaca.plotting import _SUPPORTED_HEATMAP_CHOICES, export_plot_outputs
+
+    if args.heatmap_palette not in _SUPPORTED_HEATMAP_CHOICES:
+        parser.error(
+            "invalid --heatmap_palette; choose from "
+            + ", ".join(_SUPPORTED_HEATMAP_CHOICES)
+        )
 
     def _resolve_dir(path_str, label):
         path = Path(path_str).expanduser().resolve()
@@ -466,6 +477,7 @@ def run_plot_tumour():
             heatmap_palette=args.heatmap_palette,
             genome_build=args.genome_build,
             genome_cache_dir=args.genome_cache_dir,
+            alpaca_cache_dir=args.alpaca_cache_dir,
         )
     except Exception as exc:
         logger.exception(f"Failed to generate plots: {exc}")
