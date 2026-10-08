@@ -2084,15 +2084,9 @@ def _build_plotting_notebook(plot_inputs, heatmap_palette):
         plot_inputs.get("genome_build", _DEFAULT_GENOME_BUILD)
     )
     genome_cache_dir_literal = json.dumps(plot_inputs.get("genome_cache_dir"))
-    alpaca_cache_dir_literal = json.dumps(plot_inputs.get("alpaca_cache_dir"))
 
     imports_code = f"""import os
 
-ALPACA_CACHE_DIR = {alpaca_cache_dir_literal}
-if ALPACA_CACHE_DIR:
-    from alpaca import configure_writable_caches
-
-    configure_writable_caches(ALPACA_CACHE_DIR)
 
 from pathlib import Path
 
