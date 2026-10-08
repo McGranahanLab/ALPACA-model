@@ -8,6 +8,10 @@ assertions check properties of the output rather than a golden file.
 import pandas as pd
 import pytest
 
+from alpaca.plotting import plot_cpn_per_clone, plot_heatmap_with_tree
+from alpaca.plotting_helpers import get_chr_table
+from alpaca.utils import read_tree_json
+
 from mock_inputs import (
     CLONE_PROPORTIONS,
     SAMPLE,
@@ -190,3 +194,55 @@ def test_single_sample_single_clone_multiple_segments(tmp_path, run_alpaca):
     assert set(df.index) == set(SINGLE_CLONE_TRUTH)
     for seg, truth in SINGLE_CLONE_TRUTH.items():
         assert (df.loc[seg, "pred_CN_A"], df.loc[seg, "pred_CN_B"]) == truth["clone1"]
+
+
+# ---------------------------------------------------------------------------
+# Plotting a single-clone tumour (regression: tree with no edges)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def single_clone_plot_inputs(tmp_path):
+    tumour_dir = _single_clone_dir(tmp_path / "in")
+    chr_csv = tmp_path / "chr.csv"
+    pd.DataFrame({"chr": ["chr1", "chr2"], "len": [10_000_000, 9_000_000]}).to_csv(chr_csv, index=False)
+    alpaca_output = pd.DataFrame(
+        {
+            "clone": ["clone1"] * len(SINGLE_CLONE_TRUTH),
+            "pred_CN_A": [truth["clone1"][0] for truth in SINGLE_CLONE_TRUTH.values()],
+            "pred_CN_B": [truth["clone1"][1] for truth in SINGLE_CLONE_TRUTH.values()],
+            "tumour_id": TUMOUR_ID,
+            "segment": list(SINGLE_CLONE_TRUTH),
+        }
+    )
+    return {
+        "tree": read_tree_json(str(tumour_dir / "tree_paths.json")),
+        "alpaca_output": alpaca_output,
+        "cp_table": pd.read_csv(tumour_dir / "cp_table.csv").set_index("clone"),
+        "chr_table": get_chr_table(chr_csv),
+    }
+
+
+@pytest.mark.parametrize("allele", ["A", "B"])
+def test_plot_heatmap_with_tree_single_clone(single_clone_plot_inputs, allele):
+    inputs = single_clone_plot_inputs
+    fig = plot_heatmap_with_tree(
+        tree=inputs["tree"],
+        alpaca_output=inputs["alpaca_output"].copy(),
+        cp_table=inputs["cp_table"],
+        chr_table=inputs["chr_table"],
+        allele=allele,
+    )
+    assert len(fig.data) > 0
+
+
+def test_plot_cpn_per_clone_single_clone(single_clone_plot_inputs):
+    inputs = single_clone_plot_inputs
+    fig = plot_cpn_per_clone(
+        tree=inputs["tree"],
+        alpaca_output=inputs["alpaca_output"].copy(),
+        cp_table=inputs["cp_table"],
+        chr_table=inputs["chr_table"],
+        max_cpn_cap=8,
+    )
+    assert len(fig.data) > 0

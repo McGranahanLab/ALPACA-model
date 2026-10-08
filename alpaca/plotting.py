@@ -727,6 +727,8 @@ def plot_heatmap_with_tree(
     edges = get_tree_edges(simple_tree)
 
     G = nx.Graph()
+    # add nodes explicitly: a single-clone tree has no edges
+    G.add_nodes_from(section_termini)
     for edge in edges:
         G.add_edge(edge[0], edge[1], weight=0)
 
@@ -1100,6 +1102,8 @@ def plot_cpn_per_clone(
     edges = get_tree_edges(simple_tree)
 
     G = nx.Graph()
+    # add nodes explicitly: a single-clone tree has no edges
+    G.add_nodes_from(section_termini)
     for edge in edges:
         G.add_edge(edge[0], edge[1], weight=0)
 
