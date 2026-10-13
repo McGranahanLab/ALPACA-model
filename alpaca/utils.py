@@ -182,19 +182,32 @@ def split_to_segments(tumour_dir: str) -> list[str]:
     return segments
 
 
-def concatenate_output(output_dir: str) -> str:
+def concatenate_output(output_dir: str, output_format: Optional[str] = None) -> str:
     logger = logging.getLogger("ALPACA")
-    # keep only segment files in output files list
+    # keep only segment files in output files list (.parquet or .csv)
     output_files = [
         f
         for f in os.listdir(output_dir)
-        if f.endswith(".csv") and (("optimal" in f) or ("all" in f))
+        if (f.endswith(".csv") or f.endswith(".parquet")) and (("optimal" in f) or ("all" in f))
     ]
-    dfs = [pd.read_csv(f"{output_dir}/{f}") for f in output_files]
+    dfs = [read_dataframe(f"{output_dir}/{f}") for f in output_files]
     concatenated_df = pd.concat(dfs)
     tumour_id = concatenated_df["tumour_id"].iloc[0]
-    output_name = f"{output_dir}/ALPACA_output_{tumour_id}.csv"
-    concatenated_df.to_csv(output_name, index=False)
+
+    # Determine extension: explicit output_format, or inferred from segment files
+    if output_format is not None:
+        fmt = output_format.lower().lstrip(".")
+    elif any(f.endswith(".parquet") for f in output_files):
+        fmt = "parquet"
+    else:
+        fmt = "csv"
+
+    output_name = f"{output_dir}/ALPACA_output_{tumour_id}.{fmt}"
+    if fmt == "parquet":
+        concatenated_df.to_parquet(output_name, index=False)
+    else:
+        concatenated_df.to_csv(output_name, index=False)
+
     if os.path.exists(output_name):
         logger.info(f"Combined output saved to {output_name}")
         # remove segment files
@@ -414,18 +427,61 @@ def print_logo():
     )
 
 
+def read_dataframe(filepath_or_buffer) -> pd.DataFrame:
+    """
+    Read a DataFrame from either a CSV or Parquet file based on extension.
+    """
+    path_str = str(filepath_or_buffer)
+    if path_str.endswith(".parquet"):
+        return pd.read_parquet(filepath_or_buffer)
+    return pd.read_csv(filepath_or_buffer)
+
+
+def save_dataframe(
+    df: pd.DataFrame,
+    output_dir: str,
+    output_filename: str,
+    output_format: Optional[str] = None,
+) -> str:
+    """
+    Save a DataFrame to a CSV or Parquet file.
+
+    If output_format is provided ('csv' or 'parquet'), output_filename extension
+    is adjusted accordingly. Otherwise, format is inferred from output_filename extension.
+    Defaults to 'parquet' if no extension or format is specified.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    base_name, ext = os.path.splitext(output_filename)
+    if output_format is not None:
+        fmt = output_format.lower().lstrip(".")
+        target_ext = f".{fmt}"
+    elif ext:
+        target_ext = ext
+        fmt = ext.lstrip(".").lower()
+    else:
+        fmt = "parquet"
+        target_ext = ".parquet"
+
+    final_filename = f"{base_name}{target_ext}"
+    output_path = os.path.join(output_dir, final_filename)
+
+    if fmt == "parquet":
+        df.to_parquet(output_path, index=False)
+    else:
+        df.to_csv(output_path, index=False)
+    return output_path
+
+
 def save_dataframe_to_csv(df: pd.DataFrame, output_dir: str, output_filename: str):
     """
-    Save a DataFrame to a CSV file.
+    Save a DataFrame to a file (CSV or Parquet if specified by extension).
 
     Args:
         df: DataFrame to save
-        output_dir: Path to directory where the CSV file will be saved
-        output_filename: Name of the output CSV file
+        output_dir: Path to directory where the file will be saved
+        output_filename: Name of the output file
     """
-    output_path = os.path.join(output_dir, output_filename)
-    os.makedirs(os.path.dirname(output_dir), exist_ok=True)
-    df.to_csv(output_path, index=False)
+    save_dataframe(df, output_dir, output_filename)
 
 
 def process_ci_reports(dirpath: str, delete: bool = False, outpath: Optional[str] = None) -> pd.DataFrame:

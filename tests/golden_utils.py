@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from alpaca.utils import read_dataframe
+
 # Columns whose values vary run-to-run and must be excluded from golden comparisons.
 VOLATILE_COLS = ["run_time_seconds"]
 # Additional columns that vary when using the Gurobi backend directly.
@@ -20,18 +22,35 @@ def assert_gurobi_log_is_present(log_path):
     )
 
 
+def resolve_output_path(path):
+    """Return the existing output file for ``path``, whichever format it was written in.
+
+    ALPACA writes parquet by default and CSV with ``--output_format csv``. Tests refer to
+    outputs by their CSV name; this returns the path as given if it exists, otherwise the
+    same file with the other extension (.parquet <-> .csv).
+    """
+    path = Path(path)
+    if path.exists():
+        return path
+    for ext in (".parquet", ".csv"):
+        alt = path.with_suffix(ext)
+        if alt.exists():
+            return alt
+    return path
+
+
 def assert_csv_matches_golden(actual_path, golden_path, ignore_cols=None, update=False):
-    """Compare a CSV file against a committed golden file.
+    """Compare an ALPACA output table (CSV or parquet) against a committed CSV golden file.
 
     Pass update=True (via the --update-golden flag) to regenerate the golden
     file instead of comparing. Volatile columns listed in ignore_cols are
     dropped before both writing and reading so they never appear in the golden.
     """
     ignore_cols = ignore_cols or []
-    actual_path = Path(actual_path)
+    actual_path = resolve_output_path(actual_path)
     golden_path = Path(golden_path)
 
-    actual_df = pd.read_csv(actual_path)
+    actual_df = read_dataframe(actual_path)
     actual_df = actual_df.drop(columns=[c for c in ignore_cols if c in actual_df.columns])
 
     if update:

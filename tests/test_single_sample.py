@@ -10,7 +10,7 @@ import pytest
 
 from alpaca.plotting import plot_cpn_per_clone, plot_heatmap_with_tree
 from alpaca.plotting_helpers import get_chr_table
-from alpaca.utils import read_tree_json
+from alpaca.utils import read_tree_json, read_dataframe
 
 from mock_inputs import (
     CLONE_PROPORTIONS,
@@ -74,15 +74,21 @@ def test_mock_observed_copy_numbers_match_truth(tmp_path):
 # ---------------------------------------------------------------------------
 
 
-def _run(run_alpaca, tumour_dir, out_dir):
+def _run(run_alpaca, tumour_dir, out_dir, *extra_args):
     run_alpaca(
         "run",
         "--input_tumour_directory", str(tumour_dir),
         "--output_directory", str(out_dir),
         "--debug",
         *_PYOMO_SCIP,
+        *extra_args,
     )
-    return pd.read_csv(out_dir / f"ALPACA_output_{TUMOUR_ID}.csv")
+    # Check for parquet or csv
+    for ext in (".parquet", ".csv"):
+        p = out_dir / f"ALPACA_output_{TUMOUR_ID}{ext}"
+        if p.exists():
+            return read_dataframe(p)
+    raise FileNotFoundError(f"ALPACA_output_{TUMOUR_ID} not found in {out_dir}")
 
 
 @pytest.mark.integration
@@ -101,7 +107,21 @@ def test_single_sample_single_segment(tmp_path, run_alpaca):
     # integer copy-number predictions
     assert (df["pred_CN_A"] == df["pred_CN_A"].round()).all()
     assert (df["pred_CN_B"] == df["pred_CN_B"].round()).all()
+    assert (out / "cn_change_to_ancestor.parquet").exists()
+
+
+@pytest.mark.integration
+def test_single_sample_output_format_csv(tmp_path, run_alpaca):
+    """Specifying --output_format csv writes CSV files instead of parquet."""
+    seg = "1_1000000_5000000"
+    tumour_dir = make_mock_tumour_dir(tmp_path / "in", segments=[seg])
+    out = tmp_path / "out"
+    df = _run(run_alpaca, tumour_dir, out, "--output_format", "csv")
+
+    assert (out / f"ALPACA_output_{TUMOUR_ID}.csv").exists()
+    assert not (out / f"ALPACA_output_{TUMOUR_ID}.parquet").exists()
     assert (out / "cn_change_to_ancestor.csv").exists()
+    assert len(df) == len(CLONE_PROPORTIONS)
 
 
 @pytest.mark.integration
@@ -140,7 +160,10 @@ def test_single_sample_get_scores(tmp_path, run_alpaca):
         "--input_tumour_directory", str(tumour_dir),
         "--output_directory", str(out),
     )
-    scores = pd.read_csv(out / f"ALPACA_scores_{TUMOUR_ID}.csv")
+    scores_path = out / f"ALPACA_scores_{TUMOUR_ID}.parquet"
+    if not scores_path.exists():
+        scores_path = out / f"ALPACA_scores_{TUMOUR_ID}.csv"
+    scores = read_dataframe(scores_path)
     assert {"tumour_id", "segment", "D_score", "CI_score"}.issubset(scores.columns)
     assert len(scores) == 1
 

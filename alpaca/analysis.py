@@ -1,5 +1,5 @@
 import pandas as pd
-from .utils import find_parent, read_tree_json, get_length_from_name
+from .utils import find_parent, read_tree_json, get_length_from_name, read_dataframe
 from scipy.spatial import distance
 import logging
 
@@ -49,7 +49,7 @@ def get_parent_copynumbers(
 
 
 def get_cn_change_to_ancestor(tree_path: str, tumour_df_path: str) -> pd.DataFrame:
-    tumour_df = pd.read_csv(tumour_df_path)
+    tumour_df = read_dataframe(tumour_df_path)
     tree = read_tree_json(tree_path)
     return get_parent_copynumbers(tree, tumour_df)
 
@@ -64,7 +64,7 @@ def calculate_ccd(results_path, metric="euclidean"):
     2  clone12          1          2  1_10_100
     """
     logger = logging.getLogger("ccd")
-    results_df = pd.read_csv(results_path)
+    results_df = read_dataframe(results_path)
     # validate input:
     # check if columns tumour_id, clone and segment are strings, while pred_CN_A and pred_CN_B are integers:
     if not all(results_df[col].dtype in ["str", "object"] for col in ["tumour_id", "clone", "segment"]):
@@ -125,7 +125,7 @@ def calculate_wgd_ratios(results_path: str, tree_path: str) -> pd.DataFrame:
     clones the parent is assumed to be diploid (CN=1,1).
     """
     logger = logging.getLogger("wgd")
-    results_df = pd.read_csv(results_path)
+    results_df = read_dataframe(results_path)
     required_columns = ["tumour_id", "clone", "segment", "pred_CN_A", "pred_CN_B"]
     missing = [col for col in required_columns if col not in results_df.columns]
     if missing:

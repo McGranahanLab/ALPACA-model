@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+output_format="parquet"
 tumour_id=LTX0000-Tumour1
 input_tumour_directory="examples/example_cohort/input/${tumour_id}"
 output_directory="examples/example_cohort/output/${tumour_id}"
@@ -34,29 +35,30 @@ alpaca run \
     --genome_build hg19 \
     --solver gurobi \
     --debug \
-    --output_all_solutions
+    --output_all_solutions \
+    --output_format $output_format
 
 # get cn change to ancestor:
 alpaca ancestor-delta \
     --output_directory "${output_directory}" \
-    --tumour_df_path "${output_directory}/ALPACA_output_${tumour_id}.csv" \
+    --tumour_df_path "${output_directory}/ALPACA_output_${tumour_id}.${output_format}" \
     --tree_path "${input_tumour_directory}/tree_paths.json"
 
 # calculate clone copy number diversity:
 alpaca ccd \
     --output_directory "${output_directory}" \
-    --alpaca_output_path "${output_directory}/ALPACA_output_${tumour_id}.csv"
+    --alpaca_output_path "${output_directory}/ALPACA_output_${tumour_id}.${output_format}"
 
 # calculate WGD ratios:
 alpaca wgd \
     --output_directory "${output_directory}" \
-    --alpaca_output_path "${output_directory}/ALPACA_output_${tumour_id}.csv" \
+    --alpaca_output_path "${output_directory}/ALPACA_output_${tumour_id}.${output_format}" \
     --tree_path "${input_tumour_directory}/tree_paths.json"
 
 alpaca plot-tumour \
     --input_directory "${input_tumour_directory}" \
     --output_directory "${output_directory}" \
-    --alpaca_output_path "${output_directory}/ALPACA_output_${tumour_id}.csv" \
+    --alpaca_output_path "${output_directory}/ALPACA_output_${tumour_id}.${output_format}" \
     --plot_output_mode notebook \
     --notebook_name "example_notebook" \
     --heatmap_palette "magma" \

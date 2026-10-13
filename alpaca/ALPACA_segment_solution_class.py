@@ -10,7 +10,7 @@ import typing
 from typing import Optional, Dict, Any
 import time
 from alpaca.solvers import ModelInputs, SolverResult, create_solver_backend
-from alpaca.utils import read_tree_json
+from alpaca.utils import read_tree_json, save_dataframe
 import logging
 try:
     import matplotlib.pyplot as plt  # type: ignore
@@ -178,9 +178,9 @@ def split_input_file_name(input_file_name: str, df:pd.DataFrame):
             # return original error:
             print(e)
             raise ValueError(
-                f"Input file name {input_file_name} is not in the expected format and values could not be read from the file. Expected format: ALPACA_input_table_<tumour_id>_<segment>.csv"
+                f"Input file name {input_file_name} is not in the expected format and values could not be read from the file. Expected format: ALPACA_input_table_<tumour_id>_<segment>.<ext>"
             )
-    stripped_name = stripped_name.replace(".csv", "")
+    stripped_name = stripped_name.replace(".parquet", "").replace(".csv", "")
     t_id = stripped_name.split("_")[0]
     s_name = "_".join(stripped_name.split("_")[1:])
     return t_id, s_name
@@ -441,6 +441,7 @@ class SegmentSolution:
         self.output_all_solutions: bool = False
         self.write_elbow_plots: bool = False
         self.output_model_selection_table: bool = False
+        self.output_format: str = "parquet"
         self.debug: bool = False
         self.extra_columns: list = []
         self.used_clonal_shortcut: bool = False
@@ -798,7 +799,8 @@ class SegmentSolution:
         )
 
         all_solutions_output_path = os.path.join(all_dir_seg, all_solutions_output_name)
-        all_solutions.to_csv(all_solutions_output_path, index=False)
+        fmt = getattr(self, "output_format", "parquet")
+        save_dataframe(all_solutions, all_dir_seg, all_solutions_output_name, output_format=fmt)
         return all_solutions_output_path
 
     def _save_elbow_table(self, all_dir: str) -> typing.Tuple[typing.Optional[str], typing.Optional[pd.DataFrame]]:
@@ -824,12 +826,14 @@ class SegmentSolution:
             for k, v in elbow_meta.items():
                 elbow_df[k] = v
             all_dir_seg = self._get_all_solutions_subdir_name(all_dir)
-            elbow_output_path = os.path.join(all_dir_seg, f"{self.tumour_id}_{self.segment}_elbow_table.csv")
+            fmt = getattr(self, "output_format", "parquet").lower().lstrip(".")
+            elbow_output_filename = f"{self.tumour_id}_{self.segment}_elbow_table.{fmt}"
+            elbow_output_path = os.path.join(all_dir_seg, elbow_output_filename)
             # add segment and tumour_id
             elbow_df["segment"] = self.segment if hasattr(self, "segment") else None
             elbow_df["tumour_id"] = self.tumour_id if hasattr(self, "tumour_id") else None
             elbow_df["optimal_complexity"] = self.optimal_solution['complexity'].unique()[0]
-            elbow_df.to_csv(elbow_output_path, index=False)
+            save_dataframe(elbow_df, all_dir_seg, elbow_output_filename, output_format=fmt)
             return elbow_output_path, elbow_df
         except Exception:
             return None, None
@@ -888,10 +892,11 @@ class SegmentSolution:
             # add tumour and segment columns if needed
             sol["tumour_id"] = self.tumour_id
             sol["segment"] = self.segment
-            out_name = f"all_max_{self.tumour_id}_{self.segment}.csv"
+            fmt = getattr(self, "output_format", "parquet").lower().lstrip(".")
+            out_name = f"all_max_{self.tumour_id}_{self.segment}.{fmt}"
             all_dir_seg = self._get_all_solutions_subdir_name(all_dir)
             out_path = os.path.join(all_dir_seg, out_name)
-            sol.to_csv(out_path, index=False)
+            save_dataframe(sol, all_dir_seg, out_name, output_format=self.output_format)
             return out_path
         except Exception:
             return None
@@ -934,12 +939,11 @@ class SegmentSolution:
             }
             
             # Save to segment-specific run_gap_summary file
-            run_summary_path = os.path.join(
-                output_dir,
-                f"{self.tumour_id}_{self.segment}_run_gap_summary.csv",
-            )
+            fmt = getattr(self, "output_format", "parquet").lower().lstrip(".")
+            run_summary_name = f"{self.tumour_id}_{self.segment}_run_gap_summary.{fmt}"
+            run_summary_path = os.path.join(output_dir, run_summary_name)
             df = pd.DataFrame([report_entry])
-            df.to_csv(run_summary_path, index=False)
+            save_dataframe(df, output_dir, run_summary_name, output_format=self.output_format)
         except Exception:
             # Best effort; do not fail if run_summary cannot be created
             pass
@@ -963,7 +967,11 @@ class SegmentSolution:
         """
         Creates the output path for the solution based on file name and options.
         """
-        output_name = "optimal_" + self.input_file_name.split("ALPACA_input_table_")[1]
+        output_format = getattr(self, "output_format", "parquet")
+        fmt = output_format.lower().lstrip(".")
+        base = self.input_file_name.split("ALPACA_input_table_")[1]
+        base = base.replace(".parquet", "").replace(".csv", "")
+        output_name = f"optimal_{base}.{fmt}"
         output_dir = self.config["preprocessing_config"]["output_directory"]
         output_path = os.path.join(output_dir, output_name)
         return output_path
@@ -1030,9 +1038,13 @@ class SegmentSolution:
                 pass
         if self.output_model_selection_table:
             output_model_selection_table = self.elbow_search_df_strictly_decreasing
-            output_model_selection_table.to_csv(
-                f"{output_dir}/{self.tumour_id}_{self.segment}_model_selection_table.csv",
-                index=False,
+            fmt = getattr(self, "output_format", "parquet").lower().lstrip(".")
+            model_sel_name = f"{self.tumour_id}_{self.segment}_model_selection_table.{fmt}"
+            save_dataframe(
+                output_model_selection_table,
+                output_dir,
+                model_sel_name,
+                output_format=self.output_format,
             )
         # add runtime metadata when debugging
         total_run_time = round(end_time - self.start_time)
@@ -1062,7 +1074,12 @@ class SegmentSolution:
             )
 
         # always write the optimal solution file
-        self.optimal_solution.to_csv(output_path, index=False)
+        save_dataframe(
+            self.optimal_solution,
+            output_dir,
+            os.path.basename(output_path),
+            output_format=self.output_format,
+        )
         # save reports if available:
         # ci_report:
         if self.ci_report:
@@ -1073,17 +1090,23 @@ class SegmentSolution:
             with open(ci_report_path, "w") as f:
                 json.dump(self.ci_report, f, indent=4)
         if not self.monoclonal_samples_report.empty:
-            mono_report_path = os.path.join(
+            fmt = getattr(self, "output_format", "parquet").lower().lstrip(".")
+            mono_report_name = f"{self.tumour_id}_{self.segment}_monoclonal_samples_report.{fmt}"
+            save_dataframe(
+                self.monoclonal_samples_report,
                 output_dir,
-                f"{self.tumour_id}_{self.segment}_monoclonal_samples_report.csv",
+                mono_report_name,
+                output_format=self.output_format,
             )
-            self.monoclonal_samples_report.to_csv(mono_report_path, index=False)            
         if not self.elbow_increase_report.empty:
-            elbow_report_path = os.path.join(
+            fmt = getattr(self, "output_format", "parquet").lower().lstrip(".")
+            elbow_report_name = f"{self.tumour_id}_{self.segment}_elbow_increase_report.{fmt}"
+            save_dataframe(
+                self.elbow_increase_report,
                 output_dir,
-                f"{self.tumour_id}_{self.segment}_elbow_increase_report.csv",
+                elbow_report_name,
+                output_format=self.output_format,
             )
-            self.elbow_increase_report.to_csv(elbow_report_path, index=False)
         
         # Save run gap summary report with gap status
         self._save_run_summary_report(output_dir)
