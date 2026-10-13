@@ -13,6 +13,7 @@ from plotly.subplots import make_subplots
 
 from alpaca.utils import (
     read_tree_json,
+    read_dataframe,
     flat_list,
     ensure_chr_table,
     SUPPORTED_GENOME_BUILDS,
@@ -613,11 +614,16 @@ def prepare_driver_mutations(mutation_df, tumour_id, chr_table):
 
 
 def find_alpaca_output_file(output_dir):
-    matches = sorted(Path(output_dir).glob("ALPACA_output*.csv"))
+    matches = sorted(Path(output_dir).glob("ALPACA_output*.*"))
+    matches = [m for m in matches if m.suffix.lower() in [".parquet", ".csv"]]
     if not matches:
         raise FileNotFoundError(
-            f"Could not find ALPACA output CSV in {output_dir}. Expected a file named 'ALPACA_output*.csv'."
+            f"Could not find ALPACA output file in {output_dir}. Expected a file named 'ALPACA_output*.[parquet|csv]'."
         )
+    # Prefer parquet if present, otherwise csv (or sort order)
+    parquet_matches = [m for m in matches if m.suffix.lower() == ".parquet"]
+    if parquet_matches:
+        return parquet_matches[0]
     return matches[0]
 
 
@@ -1964,7 +1970,7 @@ def _load_plot_inputs(
         chr_table_override, genome_build=genome_build, cache_dir=genome_cache_dir
     )
     tree = read_tree_json(str(tree_json_path))
-    alpaca_output = pd.read_csv(alpaca_path)
+    alpaca_output = read_dataframe(alpaca_path)
     if alpaca_output.empty:
         raise ValueError("ALPACA output is empty; cannot produce plots.")
     cp_table = pd.read_csv(cp_table_path).set_index("clone")
@@ -2114,7 +2120,7 @@ from alpaca.plotting import (
     plot_segment_fit,
     plot_sample_level_copy_numbers,
 )
-from alpaca.utils import read_tree_json
+from alpaca.utils import read_tree_json, read_dataframe
 
 pio.renderers.default = "notebook_connected"
 """
@@ -2135,7 +2141,7 @@ GENOME_CACHE_DIR = {genome_cache_dir_literal}
 
 chr_table = load_chr_table(genome_build=GENOME_BUILD, cache_dir=GENOME_CACHE_DIR)
 tree = read_tree_json(str(TREE_PATH))
-alpaca_output = pd.read_csv(ALPACA_OUTPUT_PATH)
+alpaca_output = read_dataframe(ALPACA_OUTPUT_PATH)
 cp_table = pd.read_csv(CP_TABLE_PATH).set_index("clone")
 
 sample_table = None
@@ -2157,12 +2163,20 @@ if CI_MODIFIED_REPORT_PATH.exists():
 all_solutions_available = ALL_SOLUTIONS_DIR.exists() and ALL_SOLUTIONS_DIR.is_dir()
 
 
-def _all_solutions_csv_path_for_segment(segment_id):
-    return ALL_SOLUTIONS_DIR / str(segment_id) / f"all_{{tumour_id}}_{{segment_id}}.csv"
+def _all_solutions_path_for_segment(segment_id):
+    for ext in (".parquet", ".csv"):
+        p = ALL_SOLUTIONS_DIR / str(segment_id) / f"all_{{tumour_id}}_{{segment_id}}{{ext}}"
+        if p.exists():
+            return p
+    return ALL_SOLUTIONS_DIR / str(segment_id) / f"all_{{tumour_id}}_{{segment_id}}.parquet"
 
 
 def _elbow_table_path_for_segment(segment_id):
-    return ALL_SOLUTIONS_DIR / str(segment_id) / f"{{tumour_id}}_{{segment_id}}_elbow_table.csv"
+    for ext in (".parquet", ".csv"):
+        p = ALL_SOLUTIONS_DIR / str(segment_id) / f"{{tumour_id}}_{{segment_id}}_elbow_table{{ext}}"
+        if p.exists():
+            return p
+    return ALL_SOLUTIONS_DIR / str(segment_id) / f"{{tumour_id}}_{{segment_id}}_elbow_table.parquet"
 
 mutation_table = load_mutation_table(INPUT_DIR)
 tumour_id = alpaca_output.tumour_id.iloc[0]
@@ -2278,7 +2292,7 @@ else:
     if not elbow_path.exists():
         print(f"Elbow table not found for segment {current_segment}; skipping elbow plot.")
     else:
-        elbow_df = pd.read_csv(elbow_path)
+        elbow_df = read_dataframe(elbow_path)
         required = {"allowed_complexity", "D_score"}
         if not required.issubset(elbow_df.columns):
             print("Elbow table missing required columns; skipping elbow plot.")
@@ -2325,12 +2339,12 @@ complexity_selector = None
 
 
 def _load_complexity_options(segment_id):
-    all_solution_path = _all_solutions_csv_path_for_segment(segment_id)
+    all_solution_path = _all_solutions_path_for_segment(segment_id)
     elbow_path = _elbow_table_path_for_segment(segment_id)
     if not all_solution_path.exists():
         return [], None
 
-    all_solutions_df = pd.read_csv(all_solution_path)
+    all_solutions_df = read_dataframe(all_solution_path)
     if "allowed_complexity" not in all_solutions_df.columns:
         return [], None
 
@@ -2342,7 +2356,7 @@ def _load_complexity_options(segment_id):
 
     optimal_complexity = complexity_values[0]
     if elbow_path.exists():
-        elbow_df = pd.read_csv(elbow_path)
+        elbow_df = read_dataframe(elbow_path)
         if "selected_by_s_type" in elbow_df.columns:
             selected_raw = pd.to_numeric(elbow_df["selected_by_s_type"], errors="coerce").dropna()
             if not selected_raw.empty:
@@ -2419,9 +2433,9 @@ else:
         active_complexity = None
 
         if all_solutions_available and current_complexity is not None:
-            all_solution_path = _all_solutions_csv_path_for_segment(current_segment)
+            all_solution_path = _all_solutions_path_for_segment(current_segment)
             if all_solution_path.exists():
-                all_solutions_df = pd.read_csv(all_solution_path)
+                all_solutions_df = read_dataframe(all_solution_path)
                 if "allowed_complexity" in all_solutions_df.columns:
                     all_solutions_df["allowed_complexity"] = pd.to_numeric(
                         all_solutions_df["allowed_complexity"], errors="coerce"

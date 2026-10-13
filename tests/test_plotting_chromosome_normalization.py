@@ -168,7 +168,7 @@ def test_build_plotting_notebook_appends_segment_fit_cell():
             "output_dir": Path("/tmp/output"),
             "tree_path_for_config": Path("/tmp/input/tree_paths.json"),
             "cp_table_path": Path("/tmp/input/cp_table.csv"),
-            "alpaca_output_path": Path("/tmp/output/ALPACA_output_T1.csv"),
+            "alpaca_output_path": Path("/tmp/output/ALPACA_output_T1.parquet"),
             "tumour_id": "T1",
             "genome_build": "hg19",
         },

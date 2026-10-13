@@ -4,7 +4,13 @@ import sys
 from pathlib import Path
 from importlib.resources import files
 import argparse
-from alpaca.utils import create_logger, save_dataframe_to_csv, SUPPORTED_GENOME_BUILDS
+from alpaca.utils import (
+    create_logger,
+    save_dataframe_to_csv,
+    read_dataframe,
+    save_dataframe,
+    SUPPORTED_GENOME_BUILDS,
+)
 
 
 def input_conversion():
@@ -104,10 +110,12 @@ def run_get_cn_change_to_ancestor():
         cn_change_to_ancestor_df = get_cn_change_to_ancestor(
             args.tree_path, args.tumour_df_path
         )
-        save_dataframe_to_csv(
+        fmt = "parquet" if args.tumour_df_path.endswith(".parquet") else "csv"
+        save_dataframe(
             df=cn_change_to_ancestor_df,
             output_dir=args.output_directory,
-            output_filename="cn_change_to_ancestor.csv",
+            output_filename=f"cn_change_to_ancestor.{fmt}",
+            output_format=fmt,
         )
         logger.info(
             f"Analysis completed successfully. Output saved to: {args.output_directory}"
@@ -141,16 +149,15 @@ def run_calculate_ccd():
     if not os.path.isfile(args.alpaca_output_path):
         logger.error(f"Tumour dataframe file not found: {args.alpaca_output_path}")
         exit(1)
-    # check if first row of the file contains columns 'tumour_id' and 'pred_CN_A' and 'pred_CN_B':
-    with open(args.alpaca_output_path, "r") as f:
-        header = f.readline().strip().split(",")
-        required_columns = ["tumour_id", "clone", "segment", "pred_CN_A", "pred_CN_B"]
-        missing_columns = [col for col in required_columns if col not in header]
-        if missing_columns:
-            logger.error(
-                f"Tumour dataframe file does not contain required columns: {missing_columns}"
-            )
-            exit(1)
+    # check if first row/columns contain required columns:
+    results_df = read_dataframe(args.alpaca_output_path)
+    required_columns = ["tumour_id", "clone", "segment", "pred_CN_A", "pred_CN_B"]
+    missing_columns = [col for col in required_columns if col not in results_df.columns]
+    if missing_columns:
+        logger.error(
+            f"Tumour dataframe file does not contain required columns: {missing_columns}"
+        )
+        exit(1)
     try:
         logger.info("Starting CCD analysis...")
         ccd_scores_df = calculate_ccd(args.alpaca_output_path)
@@ -158,8 +165,9 @@ def run_calculate_ccd():
         # Ensure output directory exists
         output_dir = args.output_directory
         os.makedirs(output_dir, exist_ok=True)
-        output_name = f"{output_dir}/clone_copy_number_diversity_scores.csv"
-        ccd_scores_df.to_csv(output_name, index=False)
+        fmt = "parquet" if args.alpaca_output_path.endswith(".parquet") else "csv"
+        output_name = f"{output_dir}/clone_copy_number_diversity_scores.{fmt}"
+        save_dataframe(ccd_scores_df, output_dir, f"clone_copy_number_diversity_scores.{fmt}")
         logger.info(f"Analysis completed successfully. Output saved to: {output_name}")
 
     except Exception as e:
@@ -197,15 +205,14 @@ def run_calculate_wgd():
     if not os.path.isfile(args.tree_path):
         logger.error(f"Tree file not found: {args.tree_path}")
         exit(1)
-    with open(args.alpaca_output_path, "r") as f:
-        header = f.readline().strip().split(",")
-        required_columns = ["tumour_id", "clone", "segment", "pred_CN_A", "pred_CN_B"]
-        missing_columns = [col for col in required_columns if col not in header]
-        if missing_columns:
-            logger.error(
-                f"Tumour dataframe file does not contain required columns: {missing_columns}"
-            )
-            exit(1)
+    results_df = read_dataframe(args.alpaca_output_path)
+    required_columns = ["tumour_id", "clone", "segment", "pred_CN_A", "pred_CN_B"]
+    missing_columns = [col for col in required_columns if col not in results_df.columns]
+    if missing_columns:
+        logger.error(
+            f"Tumour dataframe file does not contain required columns: {missing_columns}"
+        )
+        exit(1)
     try:
         logger.info("Starting WGD ratio analysis...")
         ratios_df = calculate_wgd_ratios(
@@ -213,8 +220,9 @@ def run_calculate_wgd():
         )
         output_dir = args.output_directory
         os.makedirs(output_dir, exist_ok=True)
-        output_name = f"{output_dir}/wgd_ratio_scores.csv"
-        ratios_df.to_csv(output_name, index=False)
+        fmt = "parquet" if args.alpaca_output_path.endswith(".parquet") else "csv"
+        output_name = f"{output_dir}/wgd_ratio_scores.{fmt}"
+        save_dataframe(ratios_df, output_dir, f"wgd_ratio_scores.{fmt}")
         logger.info(f"Analysis completed successfully. Output saved to: {output_name}")
     except Exception as e:
         logger.exception(f"An error occurred during analysis: {e}")
@@ -269,10 +277,11 @@ def run_get_scores():
     cp_table = pd.read_csv(input_dir / "cp_table.csv", index_col="clone")
     ci_table = pd.read_csv(input_dir / "ci_table.csv")
 
-    output_matches = sorted(output_dir.glob("ALPACA_output*.csv"))
+    output_matches = sorted(output_dir.glob("ALPACA_output*.*"))
+    output_matches = [m for m in output_matches if m.suffix.lower() in [".parquet", ".csv"]]
     if not output_matches:
         raise FileNotFoundError(
-            f"No ALPACA_output*.csv file found in {output_dir}. Run 'alpaca run' first or pass the output directory containing the result CSV."
+            f"No ALPACA_output*.[parquet|csv] file found in {output_dir}. Run 'alpaca run' first or pass the output directory containing the result file."
         )
 
     output_path = None
@@ -286,12 +295,12 @@ def run_get_scores():
         if output_path is None:
             output_path = output_matches[0]
 
-    results_df = pd.read_csv(output_path)
+    results_df = read_dataframe(output_path)
     required_cols = {"tumour_id", "segment", "clone", "pred_CN_A", "pred_CN_B"}
     missing_cols = sorted(required_cols - set(results_df.columns))
     if missing_cols:
         raise ValueError(
-            f"Output CSV {output_path} is missing required columns: {missing_cols}"
+            f"Output file {output_path} is missing required columns: {missing_cols}"
         )
 
     rows = []
@@ -330,8 +339,9 @@ def run_get_scores():
         )
 
     scores_df = pd.DataFrame(rows, columns=["tumour_id", "segment", "D_score", "CI_score"])
-    output_name = output_dir / f"ALPACA_scores_{tumour_id}.csv"
-    scores_df.to_csv(output_name, index=False)
+    fmt = "parquet" if output_path.suffix.lower() == ".parquet" else "csv"
+    output_name = output_dir / f"ALPACA_scores_{tumour_id}.{fmt}"
+    save_dataframe(scores_df, output_dir, f"ALPACA_scores_{tumour_id}.{fmt}")
     logger.info(f"Saved recalculated scores to {output_name}")
     print(f"Saved recalculated scores to {output_name}")
     return 0

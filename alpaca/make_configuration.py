@@ -71,6 +71,13 @@ def get_parser():
         help="Directory where output data is stored. Defaults to current directory.",
     )
     parser.add_argument(
+        "--output_format",
+        type=str,
+        choices=["parquet", "csv"],
+        default="parquet",
+        help="Format for output data files: 'parquet' (default) or 'csv'.",
+    )
+    parser.add_argument(
         "--plot_output_mode",
         type=str,
         choices=["pdf", "notebook", "none"],
@@ -389,6 +396,7 @@ def make_config(args_in):
         "write_elbow_plots": bool(args.write_elbow_plots),
         "env": ENV,
         "output_directory": args.output_directory,
+        "output_format": args.output_format,
         "min_ci": args.min_ci,
         "extra_columns": args.extra_columns,
         "plot_output_mode": args.plot_output_mode,

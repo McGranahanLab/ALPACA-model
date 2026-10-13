@@ -3,6 +3,7 @@ import pandas as pd
 import importlib
 
 from alpaca.ALPACA_segment_solution_class import SegmentSolution
+from alpaca.utils import read_dataframe
 
 
 def make_minimal_instance(tmp_path):
@@ -37,7 +38,7 @@ def test_save_all_solutions_writes_csv(tmp_path):
     all_dir = tmp_path / "all_solutions"
     path = inst._save_all_solutions(str(all_dir), all_solutions)
     assert os.path.exists(path)
-    df = pd.read_csv(path)
+    df = read_dataframe(path)
     assert set(["clone", "pred_CN_A", "pred_CN_B", "complexity", "tumour_id", "segment"]).issubset(df.columns)
     assert len(df) == len(all_solutions)
 

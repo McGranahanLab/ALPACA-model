@@ -23,6 +23,7 @@ dependencies = [
     "rdata",
     "tqdm",
     "pyomo",
+    "pyarrow",
 ]
 
 [tool.hatch.build]

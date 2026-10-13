@@ -85,6 +85,7 @@ def run_alpaca():
         concatenate_output,
         set_run_mode,
         create_logger,
+        save_dataframe,
         save_dataframe_to_csv,
         process_ci_reports,
         process_monoclonal_reports,
@@ -199,17 +200,21 @@ def run_alpaca():
             else:
                 logger.info(f"Segment {input_file_name} solved.")
         if run_mode == "tumour":
+            output_format = config["preprocessing_config"].get("output_format", "parquet")
             concatenated_output_path = concatenate_output(
-                config["preprocessing_config"]["output_directory"]
+                config["preprocessing_config"]["output_directory"],
+                output_format=output_format,
             )
             logger.info("Calculating copy number change to ancestor...")
             cn_change_to_ancestor_df = get_cn_change_to_ancestor(
                 f"{SS.tumour_dir}/tree_paths.json", concatenated_output_path
             )
-            save_dataframe_to_csv(
+            fmt = output_format.lower().lstrip(".")
+            save_dataframe(
                 df=cn_change_to_ancestor_df,
                 output_dir=SS.config["preprocessing_config"]["output_directory"],
-                output_filename="cn_change_to_ancestor.csv",
+                output_filename=f"cn_change_to_ancestor.{fmt}",
+                output_format=output_format,
             )
             # parse and combine reports:
             output_dir = SS.config["preprocessing_config"]["output_directory"]
@@ -242,6 +247,7 @@ def run_alpaca():
                         "_log_" in item
                         or "report" in item
                         or item.endswith("_summary.csv")
+                        or item.endswith("_summary.parquet")
                     ):
                         shutil.move(
                             os.path.join(output_dir, item),
