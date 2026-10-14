@@ -24,11 +24,13 @@ RUN apt-get update \
 USER $MAMBA_USER
 WORKDIR /src
 
-COPY --chown=$MAMBA_USER:$MAMBA_USER environment.yml /tmp/environment.yml
-
-
-RUN micromamba install -y -n base -f /tmp/environment.yml \
- && micromamba install -y -n base -c conda-forge \
+# Non-Python dependencies only (solver binaries called by Pyomo, R, Python itself).
+# All Python dependencies are declared in pyproject.toml.
+RUN micromamba install -y -n base -c conda-forge \
+        python=3.13 \
+        pip \
+        scip \
+        glpk \
         r-base \
         r-jsonlite \
         r-optparse \
@@ -37,7 +39,7 @@ RUN micromamba install -y -n base -f /tmp/environment.yml \
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 COPY --chown=$MAMBA_USER:$MAMBA_USER . /src/
-RUN pip install --no-deps --no-cache-dir . \
+RUN pip install --no-cache-dir ".[gurobi]" \
  && python -c "import alpaca; import alpaca.solvers" \
  && alpaca --help >/dev/null
 

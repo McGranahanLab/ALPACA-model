@@ -16,7 +16,7 @@ dependencies = [
     "matplotlib",
     "networkx",
     "numpy",
-    "pandas",
+    "pandas>=3.0.0",
     "plotly",
     "scipy",
     "seaborn",
@@ -62,3 +62,4 @@ markers = [
 
 [project.optional-dependencies]
 test = ["pytest"]
+gurobi = ["gurobipy>=13.0.0"]

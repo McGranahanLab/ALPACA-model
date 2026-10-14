@@ -748,7 +748,7 @@ docker run --rm \
 
 ### Run — Gurobi backend
 
-The `gurobipy` package is installed via `environment.yml`, but Gurobi itself
+The `gurobipy` package is installed via the `gurobi` extra in `pyproject.toml` (`pip install .[gurobi]`), but Gurobi itself
 requires a licence for anything larger than its built-in demo size (~2000
 variables). Provide your licence at run time.
 
