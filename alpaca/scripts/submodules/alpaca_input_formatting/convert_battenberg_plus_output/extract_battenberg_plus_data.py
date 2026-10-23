@@ -35,13 +35,20 @@ def _normalize_chr_value(value) -> int:
 def _standardize_fractional_columns(df: pd.DataFrame) -> pd.DataFrame:
     col_map = {c.upper(): c for c in df.columns}
     required = {
-        "SAMPLE": "sample",
-        "CHR": "chr",
-        "STARTPOS": "startpos",
-        "ENDPOS": "endpos",
-        "COPY_NUMBER_A": "copy_number_a",
-        "COPY_NUMBER_B": "copy_number_b",
-    }
+            "SAMPLE": "sample",
+            "CHR": "chr",
+            "STARTPOS": "startpos",
+            "ENDPOS": "endpos"
+        }
+    # identify copy number columns, accept either COPY_NUMBER_A or COPY_NUMBER_MAJOR
+    if "COPY_NUMBER_MAJOR" in col_map:
+        required["COPY_NUMBER_MAJOR"] = "copy_number_a"
+        required["COPY_NUMBER_MINOR"] = "copy_number_b"
+    elif "COPY_NUMBER_A" in col_map:
+        required["COPY_NUMBER_A"] = "copy_number_a"
+        required["COPY_NUMBER_B"] = "copy_number_b"
+    else:
+        raise ValueError("fractional_copy_number file must contain either COPY_NUMBER_MAJOR/COPY_NUMBER_MINOR or COPY_NUMBER_A/COPY_NUMBER_B columns")
     missing = [src for src in required if src not in col_map]
     if missing:
         raise ValueError(
