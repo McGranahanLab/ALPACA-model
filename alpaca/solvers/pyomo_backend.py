@@ -225,6 +225,10 @@ class PyomoBackend(SolverBackend):
         assert self.model is not None
         m = self.model
         m.X = pyo.Var(m.alleles, m.clones, domain=pyo.NonNegativeIntegers)
+        if "diploid" in self.clone_names:
+            # the diploid pseudo-clone is the root's parent: copy number 1 on each allele
+            for allele in self.alleles:
+                m.X[allele, "diploid"].fix(1)
         m.Yhat = pyo.Var(m.alleles, m.samples, domain=pyo.NonNegativeReals)
         m.d = pyo.Var(m.alleles, m.samples, domain=pyo.NonNegativeReals)
         m.yhat_above_upper = pyo.Var(m.alleles, m.samples, domain=pyo.Binary)
