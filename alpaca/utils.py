@@ -2,6 +2,7 @@ import os
 import pandas as pd
 from pathlib import Path
 import json
+import math
 import importlib
 import logging
 from datetime import datetime
@@ -398,6 +399,26 @@ def flat_list(target_list):
         return target_list
 
 
+def count_integers(lower: float, upper: float) -> int:
+    """Number of integers in the closed interval [lower, upper]."""
+    return max(0, math.floor(upper) - math.ceil(lower) + 1)
+
+
+def homogeneous_copy_number(lowers, uppers) -> Optional[int]:
+    """Integer a clone is restricted to, given the CIs of the samples containing it.
+
+    None if any CI holds no integer (the clone may be heterogeneous) or no CI holds
+    exactly one integer; otherwise the median of the single-integer CIs' values.
+    """
+    counts = [count_integers(lo, up) for lo, up in zip(lowers, uppers)]
+    if not counts or 0 in counts:
+        return None
+    single = [math.ceil(lo) for lo, n in zip(lowers, counts) if n == 1]
+    if not single:
+        return None
+    return int(pd.Series(single).median())
+
+
 def get_length_from_name(segment):
     e = int(segment.split("_")[-1])
     s = int(segment.split("_")[-2])
@@ -564,7 +585,7 @@ def _combine_segment_tables(files: list[str], columns: list[str]) -> pd.DataFram
     return pd.concat(dfs, ignore_index=True)
 
 
-def _remove_files(files: list[str]) -> None:
+def remove_files(files: list[str]) -> None:
     for fp in files:
         try:
             os.remove(fp)
@@ -582,7 +603,7 @@ def process_monoclonal_reports(dirpath: str, delete: bool = False, outpath: Opti
     )
     combined_df.to_csv(outpath, index=False)
     if delete:
-        _remove_files(files)
+        remove_files(files)
     return combined_df
 
 
@@ -596,7 +617,7 @@ def process_elbow_increase_reports(dirpath: str, delete: bool = False, outpath: 
     )
     combined_df.to_csv(outpath, index=False)
     if delete:
-        _remove_files(files)
+        remove_files(files)
     return combined_df
 
 
@@ -620,7 +641,7 @@ def process_run_summary_reports(dirpath: str, delete: bool = False, outpath: Opt
     else:
         combined_df.to_csv(outpath, index=False)
     if delete:
-        _remove_files(files)
+        remove_files(files)
 
 
 class SegmentInfeasibleError(RuntimeError):

@@ -11,6 +11,7 @@ from alpaca.utils import (
     get_tree_edges,
     flat_list,
     get_length_from_name,
+    homogeneous_copy_number,
     SegmentInfeasibleError,
 )
 
@@ -47,6 +48,7 @@ class Model:
             "objectives": "DCI",
             "restrict_heterogeneity_flag": False,
             "restrict_to_clonal_only_flag": False,
+            "single_sample_restrict_heterogeneity": True,
             "time_limit": 60,
             "cpus": 2,
             "BestObjStop": None,
@@ -1027,68 +1029,24 @@ class Model:
         return self.model
 
     def restrict_heterogeneity(self):
-        # lenient criterion: if at least one sample containing clone x has no overlap with an integer, clone x can be heterogeneous
-        homogenous_clones_A = []
-        heterogeneous_clones_A = []
-        homogenous_clones_B = []
-        heterogeneous_clones_B = []
+        # lenient criterion: if at least one sample containing clone x has no overlap with an integer, clone x can be heterogeneous;
+        # otherwise, if a sample's CI holds exactly one integer, the clone is fixed to it (see homogeneous_copy_number)
+        ci_table = self.ci_table[self.ci_table.segment == self.segment]
         for clone in self.clone_names:
-            samples_where_clone_is_present = (
-                (self.clone_proportions[self.clone_proportions.index == clone] > 0)
-                .iloc[0][
-                    (
-                        self.clone_proportions[self.clone_proportions.index == clone]
-                        > 0
-                    ).iloc[0]
-                ]
-                .index.to_list()
-            )
-            clone_ci_table = self.ci_table[
-                self.ci_table["sample"].isin(samples_where_clone_is_present)
-            ]
-            clone_ci_table = clone_ci_table[clone_ci_table.segment == self.segment]
-            clone_ci_table["span_A"] = clone_ci_table["upper_CI_A"].astype(
-                int
-            ) - clone_ci_table["lower_CI_A"].astype(
-                int
-            )  # 0 = no overlap with integer, 1 = overlap with one integer, 2 = overlap with two integers etc
-            clone_ci_table["span_B"] = clone_ci_table["upper_CI_B"].astype(
-                int
-            ) - clone_ci_table["lower_CI_B"].astype(int)
-            if (
-                clone_ci_table["span_A"] == 0
-            ).any():  # if at least one equals zero it means that in at least one sample CI don't overlap with any integer
-                heterogeneous_clones_A.append(clone)
-            elif (clone_ci_table["span_A"] == 1).any():
-                homogenous_clones_A.append(clone)
-                cn_value = int(
-                    (
-                        clone_ci_table["upper_CI_A"].astype(int)[
-                            clone_ci_table["span_A"] == 1
-                        ]
-                    ).median()
+            if clone not in self.clone_proportions.index:
+                continue
+            present = self.clone_proportions.loc[clone] > 0
+            clone_ci_table = ci_table[ci_table["sample"].isin(present[present].index)]
+            for allele in ["A", "B"]:
+                cn_value = homogeneous_copy_number(
+                    clone_ci_table[f"lower_CI_{allele}"], clone_ci_table[f"upper_CI_{allele}"]
                 )
-                # constrain to integer copy number:
-                self.model.addConstr(
-                    self.X["A"][clone] == cn_value,
-                    name=f"homogenous_integer_constr_{clone}_A",
-                )
-            if (clone_ci_table["span_B"] == 0).any():
-                heterogeneous_clones_B.append(clone)
-            elif (clone_ci_table["span_B"] == 1).any():
-                homogenous_clones_B.append(clone)
-                cn_value = int(
-                    (
-                        clone_ci_table["upper_CI_B"].astype(int)[
-                            clone_ci_table["span_B"] == 1
-                        ]
-                    ).median()
-                )
-                # constrain to integer copy number:
-                self.model.addConstr(
-                    self.X["B"][clone] == cn_value,
-                    name=f"homogenous_integer_constr_{clone}_B",
-                )
+                if cn_value is not None:
+                    # constrain to integer copy number:
+                    self.model.addConstr(
+                        self.X[allele][clone] == cn_value,
+                        name=f"homogenous_integer_constr_{clone}_{allele}",
+                    )
 
     def restrict_to_clonal_only(self):
         if "diploid" in self.clone_names:

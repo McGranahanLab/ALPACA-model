@@ -11,6 +11,18 @@ from typing import Optional, Dict, Any
 import time
 from alpaca.solvers import ModelInputs, SolverResult, create_solver_backend
 from alpaca.utils import read_tree_json, save_dataframe
+from alpaca.edge_cases import (
+    AMBIGUITY_CHECK_FAILED,
+    AMBIGUOUS,
+    SINGLE_CLONE,
+    SINGLE_CLONE_AND_SINGLE_SAMPLE,
+    SINGLE_SAMPLE,
+    STANDARD,
+    classify_tumour,
+    make_segment_report,
+    segment_report_name,
+    solve_single_clone,
+)
 import logging
 try:
     import matplotlib.pyplot as plt  # type: ignore
@@ -485,6 +497,19 @@ class SegmentSolution:
         validate_inputs(
             it=self.input_table, cpt=self.cp_table, cit=self.ci_table, t=self.tree
         )
+        # single clone / single sample tumours get dedicated handling (see alpaca.edge_cases):
+        self.tumour_category = classify_tumour(self.cp_table)
+        self.solver_path = "ilp"
+        self.edge_case_flags: list = []
+        self.edge_case_details: str = ""
+        if self.tumour_category == SINGLE_SAMPLE and self.config["model_config"].get(
+            "single_sample_restrict_heterogeneity", True
+        ):
+            # copy so the change cannot leak into other segments sharing this config
+            self.config = {
+                **self.config,
+                "model_config": {**self.config["model_config"], "restrict_heterogeneity_flag": True},
+            }
         self.solver_name = self.config["model_config"].get("solver", "pyomo")
         self.model_inputs = ModelInputs(
             segment=self.segment,
@@ -535,6 +560,46 @@ class SegmentSolution:
             )
         self.get_model_metrics(solver_result)
 
+    def _events_from_diploid(self, pred_cn_a: int, pred_cn_b: int) -> int:
+        """Complexity of a solution in which every clone has the same copy numbers."""
+        if not self.config["model_config"].get("minimise_events_to_diploid", True):
+            return 0
+        return abs(pred_cn_a - 1) + abs(pred_cn_b - 1)
+
+    def _shortcut_result(
+        self, pred_cn_a: int, pred_cn_b: int, ci_score: int, d_score: float, shortcut: str
+    ) -> SolverResult:
+        """SolverResult for a solution found without the ILP (every clone gets the same state)."""
+        complexity = self._events_from_diploid(pred_cn_a, pred_cn_b)
+        solution = pd.DataFrame({"clone": self.cp_table.index.to_list()})
+        solution["pred_CN_A"] = pred_cn_a
+        solution["pred_CN_B"] = pred_cn_b
+        solution["complexity"] = complexity
+        solution["CI_score"] = ci_score
+        solution["D_score"] = d_score
+        solution["variability_penalty_count"] = 0
+        solution["state_change_count"] = 0
+        solution["event_count"] = complexity
+        solution["allowed_complexity"] = 0
+        solution["gurobi_time_CI"] = -1
+        solution["gurobi_gap_CI"] = -1
+        solution["gurobi_time_D"] = -1
+        solution["gurobi_gap_D"] = -1
+        solution = solution.sort_values("clone").reset_index(drop=True)
+        return SolverResult(
+            solution=solution,
+            runtime=0.0,
+            backend_name=shortcut,
+            gap_status={
+                "max_gap": 0,
+                "gap_reason": shortcut,
+                "runtime": 0.0,
+                "status": 0,
+            },
+            objective_values={"D_score": d_score, "CI_score": ci_score},
+            solver_specific={"shortcut": shortcut},
+        )
+
     def _build_clonal_shortcut_result(self) -> Optional[SolverResult]:
         if "is_clonal" not in self.input_table.columns:
             return None
@@ -545,37 +610,46 @@ class SegmentSolution:
         unique_states = rounded_cns.drop_duplicates().reset_index(drop=True)
         if len(unique_states) != 1:
             return None
-
-        pred_cn_a = int(unique_states.at[0, "cpnA"])
-        pred_cn_b = int(unique_states.at[0, "cpnB"])
-        solution = pd.DataFrame({"clone": self.cp_table.index.to_list()})
-        solution["pred_CN_A"] = pred_cn_a
-        solution["pred_CN_B"] = pred_cn_b
-        solution["complexity"] = 0
-        solution["CI_score"] = 0
-        solution["D_score"] = 0.0
-        solution["variability_penalty_count"] = 0
-        solution["state_change_count"] = 0
-        solution["event_count"] = 0
-        solution["allowed_complexity"] = 0
-        solution["gurobi_time_CI"] = -1
-        solution["gurobi_gap_CI"] = -1
-        solution["gurobi_time_D"] = -1
-        solution["gurobi_gap_D"] = -1
-        solution = solution.sort_values("clone").reset_index(drop=True)
-        return SolverResult(
-            solution=solution,
-            runtime=0.0,
-            backend_name="clonal_shortcut",
-            gap_status={
-                "max_gap": 0,
-                "gap_reason": "clonal_shortcut",
-                "runtime": 0.0,
-                "status": 0,
-            },
-            objective_values={"D_score": 0.0, "CI_score": 0},
-            solver_specific={"shortcut": "is_clonal_identical_integer_cns"},
+        return self._shortcut_result(
+            int(unique_states.at[0, "cpnA"]),
+            int(unique_states.at[0, "cpnB"]),
+            ci_score=0,
+            d_score=0.0,
+            shortcut="clonal_shortcut",
         )
+
+    def _build_single_clone_result(self) -> SolverResult:
+        (pred_cn_a, pred_cn_b), scores, flags, details = solve_single_clone(
+            self.input_table, self.ci_table, self.segment, self.config["model_config"]
+        )
+        self.edge_case_flags += flags
+        self.edge_case_details = details
+        return self._shortcut_result(
+            pred_cn_a,
+            pred_cn_b,
+            ci_score=scores["CI_score"],
+            d_score=scores["D_score"],
+            shortcut="single_clone_direct",
+        )
+
+    def _use_shortcut_result(self, result: SolverResult) -> None:
+        shortcut = result.backend_name
+        self.used_clonal_shortcut = True
+        self.solver_path = shortcut
+        self.maximum_complexity = 0
+        self.get_model_metrics(result)
+        self.solutions_combined = result.solution.copy()
+        self.elbow_search_df = self.solutions_combined[
+            ["complexity", "D_score", "CI_score", "allowed_complexity"]
+        ].drop_duplicates(subset="allowed_complexity", keep="first")
+        self.elbow_search_df_strictly_decreasing = self.elbow_search_df.copy()
+        self.elbow = {
+            "s_min": 0,
+            "s_raw": 0,
+            "s_strictly_decreasing": 0,
+            "raw_code": shortcut,
+            "dec_code": shortcut,
+        }
 
     def stop_conditions_check(self, oft):
         optimization_time = self.metrics["run_time"][-1]
@@ -592,27 +666,17 @@ class SegmentSolution:
         return no_improvement_in_D_score & at_least_3_complexities & slow_iteration
 
     def run_iterations(self):
+        if self.tumour_category in (SINGLE_CLONE, SINGLE_CLONE_AND_SINGLE_SAMPLE):
+            print(f"Skipping solver for {self.segment}: the tumour has a single clone.")
+            self._use_shortcut_result(self._build_single_clone_result())
+            return
         shortcut_result = self._build_clonal_shortcut_result()
         if shortcut_result is not None:
             print(
                 f"Skipping solver for {self.segment}: segment is clonal and integer "
                 "copy numbers are identical across samples."
             )
-            self.used_clonal_shortcut = True
-            self.maximum_complexity = 0
-            self.get_model_metrics(shortcut_result)
-            self.solutions_combined = shortcut_result.solution.copy()
-            self.elbow_search_df = self.solutions_combined[
-                ["complexity", "D_score", "CI_score", "allowed_complexity"]
-            ].drop_duplicates(subset="allowed_complexity", keep="first")
-            self.elbow_search_df_strictly_decreasing = self.elbow_search_df.copy()
-            self.elbow = {
-                "s_min": 0,
-                "s_raw": 0,
-                "s_strictly_decreasing": 0,
-                "raw_code": "clonal_shortcut",
-                "dec_code": "clonal_shortcut",
-            }
+            self._use_shortcut_result(shortcut_result)
             return
         # use heuristics to determine maximum complexity:
         self.maximum_complexity = max(
@@ -786,6 +850,81 @@ class SegmentSolution:
             columns_to_keep = self._get_columns_to_keep(base_columns, self.optimal_solution.columns)
             
             self.optimal_solution = self.optimal_solution[columns_to_keep]
+
+    def check_ambiguity(self):
+        """Flag the segment if another assignment fits a single-sample tumour equally well.
+
+        The ILP is re-solved at the selected complexity with the CI and D scores capped
+        at the selected solution's values and the copy numbers of the clones present
+        in the sample required to differ. Clones absent from the sample are left out:
+        no data constrains them.
+        """
+        if self.tumour_category != SINGLE_SAMPLE or self.used_clonal_shortcut:
+            return
+        chosen = self.solutions_combined.query(
+            f"allowed_complexity == {self.optimal_solution_index}"
+        )
+        chosen = chosen[chosen.clone != "diploid"].set_index("clone")
+        present = self.cp_table.index[self.cp_table.sum(axis=1) > 0]
+        reference = {
+            (allele, clone): int(chosen.loc[clone, f"pred_CN_{allele}"])
+            for clone in present
+            for allele in ("A", "B")
+        }
+        objectives = str(self.config["model_config"].get("objectives", "DCI")).upper()
+        max_ci = float(chosen["CI_score"].iloc[0]) if "CI" in objectives else None
+        # D scores are rounded to 3 decimals in the solution frame
+        max_d = float(chosen["D_score"].iloc[0]) + 1e-3 if "D" in objectives else None
+        backend_config = {
+            **self.config["model_config"],
+            "allowed_tree_complexity": self.optimal_solution_index,
+            "output_directory": self.config["preprocessing_config"].get("output_directory", "."),
+        }
+        try:
+            backend = create_solver_backend(self.solver_name, self.model_inputs, backend_config)
+            alternative = backend.find_alternative(
+                self.optimal_solution_index, reference, max_ci, max_d
+            )
+        except Exception as e:
+            self.edge_case_flags.append(AMBIGUITY_CHECK_FAILED)
+            self.edge_case_details = f"ambiguity check failed: {e}"
+            return
+        if alternative is None:
+            return
+        alternative = alternative.set_index("clone")
+        differences = [
+            f"{clone}: ({chosen.loc[clone, 'pred_CN_A']},{chosen.loc[clone, 'pred_CN_B']}) or "
+            f"({alternative.loc[clone, 'pred_CN_A']},{alternative.loc[clone, 'pred_CN_B']})"
+            for clone in present
+            if (chosen.loc[clone, "pred_CN_A"], chosen.loc[clone, "pred_CN_B"])
+            != (alternative.loc[clone, "pred_CN_A"], alternative.loc[clone, "pred_CN_B"])
+        ]
+        self.edge_case_flags.append(AMBIGUOUS)
+        self.edge_case_details = "equally good alternative: " + "; ".join(differences)
+
+    def _save_edge_case_report(self, output_dir: str) -> None:
+        if self.tumour_category == STANDARD:
+            return
+        report = make_segment_report(
+            tumour_id=self.tumour_id,
+            segment=self.segment,
+            category=self.tumour_category,
+            n_clones=len(self.cp_table.index),
+            n_samples=len(self.cp_table.columns),
+            solver_path=self.solver_path,
+            restrict_heterogeneity=bool(
+                self.config["model_config"].get("restrict_heterogeneity_flag", False)
+            ),
+            flags=self.edge_case_flags,
+            details=self.edge_case_details,
+        )
+        fmt = getattr(self, "output_format", "parquet").lower().lstrip(".")
+        save_dataframe(
+            report,
+            output_dir,
+            segment_report_name(self.tumour_id, self.segment, fmt),
+            output_format=fmt,
+        )
 
     def _get_all_solutions_subdir_name(self, all_dir: str) -> str:
         all_dir_seg = os.path.join(all_dir, self.segment)
@@ -1110,6 +1249,7 @@ class SegmentSolution:
         
         # Save run gap summary report with gap status
         self._save_run_summary_report(output_dir)
+        self._save_edge_case_report(output_dir)
         
         if os.path.exists(output_path):
             logger.info("Segment output created")

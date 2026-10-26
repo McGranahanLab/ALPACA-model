@@ -92,6 +92,12 @@ def run_alpaca():
         process_run_summary_reports,
         process_infeasibility_reports,
         SegmentInfeasibleError,
+        remove_files,
+    )
+    from alpaca.edge_cases import (
+        find_segment_reports,
+        warning_file_name,
+        write_tumour_edge_case_outputs,
     )
     from alpaca.make_configuration import make_config
     from alpaca.analysis import get_cn_change_to_ancestor
@@ -182,6 +188,7 @@ def run_alpaca():
                 SS.run_iterations()
                 SS.find_optimal_solution()
                 SS.get_solution()
+                SS.check_ambiguity()
                 SS.save_output()
             except SegmentInfeasibleError as e:
                 output_dir = config["preprocessing_config"].get("output_directory", ".")
@@ -234,6 +241,16 @@ def run_alpaca():
                 delete=True,
                 outpath=output_dir + "/infeasibility_report.csv",
             )
+            # single clone / single sample tumours: warning_<category>.txt + edge_case_report.csv
+            edge_case_category = write_tumour_edge_case_outputs(
+                SS.tumour_dir, output_dir, output_dir
+            )
+            remove_files(find_segment_reports(output_dir))
+            if edge_case_category is not None:
+                logger.warning(
+                    f"Tumour is a {edge_case_category.replace('_', ' ')} tumour; see "
+                    f"{os.path.join(output_dir, warning_file_name(edge_case_category))}"
+                )
             # cleanup: move all the logs, reports and summaries to a separate folder:
             logs_and_reports_dir = os.path.join(output_dir, "logs_and_reports")
             try:

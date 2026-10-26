@@ -253,6 +253,15 @@ def get_parser():
         "Note: requesting 'gurobi_time' or 'gurobi_gap' will automatically include objective-specific metrics (e.g. _D, _CI) if available.",
     )
     parser.add_argument(
+        "--single_sample_restrict_heterogeneity",
+        type=int,
+        choices=[0, 1],
+        default=1,
+        help="For tumours with a single sample and several clones, force clones to be clonal (integer) wherever "
+        "the sample's confidence interval admits a single integer. Subclonal copy numbers are weakly identifiable "
+        "from one sample, so this is on by default (1).",
+    )
+    parser.add_argument(
         "--strict_gap",
         type=int,
         choices=[0, 1],
@@ -383,6 +392,7 @@ def make_config(args_in):
             "debug_solution_file": args.debug_solution_file,
             "complexity": args.complexity,
             "strict_gap": bool(args.strict_gap),
+            "single_sample_restrict_heterogeneity": bool(args.single_sample_restrict_heterogeneity),
             "pyomo_solver_options": pyomo_solver_options,
             "simulate_infeasibility": args.simulate_infeasibility,
         }
