@@ -10,7 +10,7 @@ import typing
 from typing import Optional, Dict, Any
 import time
 from alpaca.solvers import ModelInputs, SolverResult, create_solver_backend
-from alpaca.utils import read_tree_json, save_dataframe
+from alpaca.utils import read_tree_json, save_dataframe, SegmentInfeasibleError
 from alpaca.edge_cases import (
     AMBIGUITY_CHECK_FAILED,
     AMBIGUOUS,
@@ -543,8 +543,12 @@ class SegmentSolution:
         }
         self.metrics["gap_status"].append(gap_status)
 
-    def run_model(self, allowed_complexity):
-        backend_config = {**self.config["model_config"], "allowed_tree_complexity": allowed_complexity}
+    def run_model(self, allowed_complexity, report_infeasibility=True):
+        backend_config = {
+            **self.config["model_config"],
+            "allowed_tree_complexity": allowed_complexity,
+            "report_infeasibility": report_infeasibility,
+        }
         # Forward output_directory so infeasibility reports are written to the correct location.
         if "output_directory" not in backend_config:
             backend_config["output_directory"] = self.config["preprocessing_config"].get("output_directory", ".")
@@ -651,6 +655,26 @@ class SegmentSolution:
             "dec_code": shortcut,
         }
 
+    def _run_lowest_feasible_model(self) -> int:
+        """Run the model at complexity 0, or at the lowest complexity that is feasible.
+
+        Restricting heterogeneity fixes some clones' copy numbers, which can take more
+        events from diploid than a low complexity cap allows. Those caps are skipped
+        without writing infeasibility reports. Returns the complexity that was run.
+        """
+        if not self.config["model_config"].get("restrict_heterogeneity_flag", False):
+            self.run_model(allowed_complexity=0)
+            return 0
+        for c in range(0, self.maximum_complexity):
+            try:
+                self.run_model(allowed_complexity=c, report_infeasibility=False)
+                return c
+            except SegmentInfeasibleError:
+                continue
+        # infeasible at every complexity: run once more so the infeasibility is reported
+        self.run_model(allowed_complexity=self.maximum_complexity)
+        return self.maximum_complexity
+
     def stop_conditions_check(self, oft):
         optimization_time = self.metrics["run_time"][-1]
         time_limit = self.metrics["time_limits"][-1] if self.metrics["time_limits"] else None
@@ -706,12 +730,12 @@ class SegmentSolution:
             print(f"**Single iteration with complexity: {override_complexity}")
             self.run_model(allowed_complexity=override_complexity)
         else:
-            # run diploid model:
-            self.run_model(allowed_complexity=0)
-            self.elbow_increase_report = pd.DataFrame() 
+            # run diploid model (or the lowest complexity the restrictions allow):
+            first_complexity = self._run_lowest_feasible_model()
+            self.elbow_increase_report = pd.DataFrame()
             # don't iterate if solution is likely to be diploid:
             if self.metrics["D_scores"][0] > objective_function_threshold:
-                complexity_range = range(1, self.maximum_complexity)
+                complexity_range = range(first_complexity + 1, self.maximum_complexity)
                 for c in complexity_range:
                     print(f"**Iterating with complexity: {c}")
                     self.run_model(allowed_complexity=c)
@@ -784,16 +808,19 @@ class SegmentSolution:
             self.config["model_config"]["d_zero"]
             & (self.elbow_search_df.D_score == 0).any()
         ):
-            self.optimal_solution_index = self.elbow_search_df.query(
-                "D_score == 0"
-            ).index[0]
+            self.optimal_solution_index = int(
+                self.elbow_search_df.query("D_score == 0")["allowed_complexity"].iloc[0]
+            )
 
     def find_optimal_solution(self):
         # check if diploid solution was found:
         assert self.metrics is not None, "Metrics not found, run iterations first"
         diploid_solution_found = len(set(self.metrics["D_scores"])) == 1
         if diploid_solution_found:
-            self.optimal_solution_index = 0
+            # the lowest complexity that was run (0 unless restrictions made it infeasible)
+            self.optimal_solution_index = int(
+                pd.concat(self.metrics["solutions"])["allowed_complexity"].min()
+            )
         else:
             self.find_elbow()
             # add metadata to the elbow search dataframe:
@@ -1056,10 +1083,12 @@ class SegmentSolution:
             
             # Get gap status for the optimal solution
             optimal_idx = self.optimal_solution_index
-            if optimal_idx is None or optimal_idx >= len(self.metrics["gap_status"]):
+            if optimal_idx is None:
                 return
-            
-            gap_info = self.metrics["gap_status"][optimal_idx]
+            run_complexities = [int(sol["allowed_complexity"].iloc[0]) for sol in self.metrics["solutions"]]
+            if optimal_idx not in run_complexities:
+                return
+            gap_info = self.metrics["gap_status"][run_complexities.index(optimal_idx)]
             max_gap = gap_info.get("max_gap", -1)
             
             # Only report if gap > 0 (non-optimal solution)

@@ -159,3 +159,25 @@ def test_segment_mode_writes_per_segment_reports(tmp_path, run_alpaca, request, 
         assert report["category"].tolist() == [category]
     # tumour-level warning files are only written in tumour mode (Nextflow writes them after merging)
     assert not list(out.glob("warning_*.txt"))
+
+
+@pytest.mark.parametrize("solver", [_PYOMO_SCIP, pytest.param(("--solver", "gurobi"), marks=pytest.mark.requires_gurobi)])
+def test_single_sample_clonal_segment_is_feasible(tmp_path, run_alpaca, solver):
+    """Restricting heterogeneity fixes every clone to (2,1), which complexity 0 cannot reach.
+
+    The iterations must start at the lowest feasible complexity rather than dropping the
+    segment as infeasible.
+    """
+    if "gurobi" in solver:
+        pytest.importorskip("gurobipy")
+    clones = ("clone1", "clone2", "clone3", "clone4")
+    tumour_dir = make_mock_tumour_dir(tmp_path / "in", segments=[SEG1], truth={SEG1: {c: (2, 1) for c in clones}})
+    out = tmp_path / "out"
+    run_alpaca(
+        "run", "--input_tumour_directory", str(tumour_dir), "--output_directory", str(out), "--debug", *solver,
+    )
+    df = read_dataframe(out / f"ALPACA_output_{TUMOUR_ID}.parquet")
+    assert set(zip(df["pred_CN_A"], df["pred_CN_B"])) == {(2, 1)}
+    infeasible = pd.read_csv(out / "logs_and_reports" / "infeasibility_report.csv")
+    assert infeasible.empty
+    assert _edge_case_report(out).loc[SEG1, "restrict_heterogeneity"]

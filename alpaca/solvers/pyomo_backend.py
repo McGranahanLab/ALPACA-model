@@ -88,6 +88,7 @@ class PyomoBackend(SolverBackend):
         self.solver_log_path = config.get("solver_logs", "")
         self.output_directory = str(config.get("output_directory", ""))
         self.simulate_infeasibility = str(config.get("simulate_infeasibility", ""))
+        self.report_infeasibility = bool(config.get("report_infeasibility", True))
         self.big_m = 1000
         self.model: pyo.ConcreteModel | None = None
         self.allowed_tree_complexity = self.allowed_tree_complexity_default
@@ -755,6 +756,8 @@ class PyomoBackend(SolverBackend):
         """Raise SegmentInfeasibleError if the solver returned an infeasible status."""
         termination = str(getattr(results.solver, "termination_condition", "")).lower()
         solver_status = str(getattr(results.solver, "status", "unknown"))
+        if "infeasible" in termination and not self.report_infeasibility:
+            raise SegmentInfeasibleError(self.tumour_id, self.segment, solver_status)
         if "infeasible" in termination:
             # Write a JSON summary report so it can be combined with other segments later.
             import json as _json

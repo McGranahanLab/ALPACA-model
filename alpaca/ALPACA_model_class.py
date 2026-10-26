@@ -1137,6 +1137,8 @@ class Model:
             status = None
 
         if status == GRB.INFEASIBLE:
+            if not getattr(self, "report_infeasibility", True):
+                raise SegmentInfeasibleError(self.tumour_id, self.segment, status)
             self.output_for_infeasible_models()  # always raises SegmentInfeasibleError
         # if model was run in debug mode with a supplied solution, exit here
         if getattr(self, "debug", False) and getattr(self, "debug_solution_file", False):
