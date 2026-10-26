@@ -544,58 +544,60 @@ def process_ci_reports(dirpath: str, delete: bool = False, outpath: Optional[str
                     print(f"Warning: failed to remove {fp}: {e}", file=sys.stderr)
 
 
-def process_monoclonal_reports(dirpath: str, delete: bool = False, outpath: Optional[str] = None) -> pd.DataFrame:
-    pattern = os.path.join(dirpath, "*_monoclonal_samples_report.csv")
-    files = sorted(glob.glob(pattern))
-    if outpath is None:
-        combined_df = os.path.join(dirpath, "monoclonal_samples_report.csv")
-    # each file is a csv with header, concatenate them or make an empty dataframe
-    if not files:
-        combined_df = pd.DataFrame(columns=['tumour_id', 'sample', 'segment', 'cpnA', 'cpnB', 'distance_to_integer_A', 'distance_to_integer_B'])
-    else:
-        dfs = []
-        for fp in files:
-            try:
-                df = pd.read_csv(fp)
-                dfs.append(df)
-            except Exception as e:
-                print(f"Warning: failed to read {fp}: {e}", file=sys.stderr)
-                continue
-        if dfs:
-            combined_df = pd.concat(dfs, ignore_index=True)
-    combined_df.to_csv(outpath, index=False)
-    if delete and bool(files):
+def _find_segment_tables(dirpath: str, suffix: str) -> list[str]:
+    """Per-segment report tables named *<suffix>.csv or *<suffix>.parquet."""
+    files = []
+    for ext in ("csv", "parquet"):
+        files += glob.glob(os.path.join(dirpath, f"*{suffix}.{ext}"))
+    return sorted(files)
+
+
+def _combine_segment_tables(files: list[str], columns: list[str]) -> pd.DataFrame:
+    dfs = []
+    for fp in files:
+        try:
+            dfs.append(read_dataframe(fp))
+        except Exception as e:
+            print(f"Warning: failed to read {fp}: {e}", file=sys.stderr)
+    if not dfs:
+        return pd.DataFrame(columns=columns)
+    return pd.concat(dfs, ignore_index=True)
+
+
+def _remove_files(files: list[str]) -> None:
+    for fp in files:
         try:
             os.remove(fp)
         except Exception as e:
             print(f"Warning: failed to remove {fp}: {e}", file=sys.stderr)
+
+
+def process_monoclonal_reports(dirpath: str, delete: bool = False, outpath: Optional[str] = None) -> pd.DataFrame:
+    files = _find_segment_tables(dirpath, "_monoclonal_samples_report")
+    if outpath is None:
+        outpath = os.path.join(dirpath, "monoclonal_samples_report.csv")
+    combined_df = _combine_segment_tables(
+        files,
+        ['tumour_id', 'sample', 'segment', 'cpnA', 'cpnB', 'distance_to_integer_A', 'distance_to_integer_B'],
+    )
+    combined_df.to_csv(outpath, index=False)
+    if delete:
+        _remove_files(files)
+    return combined_df
 
 
 def process_elbow_increase_reports(dirpath: str, delete: bool = False, outpath: Optional[str] = None) -> pd.DataFrame:
-    pattern = os.path.join(dirpath, "*_elbow_increase_report.csv")
-    files = sorted(glob.glob(pattern))
+    files = _find_segment_tables(dirpath, "_elbow_increase_report")
     if outpath is None:
-        combined_df = os.path.join(dirpath, "elbow_increase_report.csv")
-    # each file is a csv with header, concatenate them or make an empty dataframe
-    if not files:
-        combined_df = pd.DataFrame(columns=['complexity', 'D_score', 'CI_score', 'allowed_complexity', 'issue', 'tumour_id', 'segment'])
-    else:
-        dfs = []
-        for fp in files:
-            try:
-                df = pd.read_csv(fp)
-                dfs.append(df)
-            except Exception as e:
-                print(f"Warning: failed to read {fp}: {e}", file=sys.stderr)
-                continue
-        if dfs:
-            combined_df = pd.concat(dfs, ignore_index=True)
+        outpath = os.path.join(dirpath, "elbow_increase_report.csv")
+    combined_df = _combine_segment_tables(
+        files,
+        ['complexity', 'D_score', 'CI_score', 'allowed_complexity', 'issue', 'tumour_id', 'segment'],
+    )
     combined_df.to_csv(outpath, index=False)
-    if delete and bool(files):
-        try:
-            os.remove(fp)
-        except Exception as e:
-            print(f"Warning: failed to remove {fp}: {e}", file=sys.stderr)
+    if delete:
+        _remove_files(files)
+    return combined_df
 
 
 def process_run_summary_reports(dirpath: str, delete: bool = False, outpath: Optional[str] = None) -> pd.DataFrame:
@@ -604,46 +606,21 @@ def process_run_summary_reports(dirpath: str, delete: bool = False, outpath: Opt
     Only includes segments with non-zero gap (non-optimal solutions).
     Reports gap value and reason (time_limit, gap_tolerance, or other).
     """
-    pattern = os.path.join(dirpath, "*_run_gap_summary.csv")
-    files = sorted(glob.glob(pattern))
+    files = _find_segment_tables(dirpath, "_run_gap_summary")
     if outpath is None:
         outpath = os.path.join(dirpath, "run_gap_summary.csv")
-    
-    # Concatenate all segment reports
-    if not files:
-        combined_df = pd.DataFrame(columns=[
-            'tumour_id', 'segment', 'max_gap', 'gap_reason', 
-            'runtime', 'optimal_complexity', 'strict_gap_enabled'
-        ])
-    else:
-        dfs = []
-        for fp in files:
-            try:
-                df = pd.read_csv(fp)
-                dfs.append(df)
-            except Exception as e:
-                print(f"Warning: failed to read {fp}: {e}", file=sys.stderr)
-                continue
-        if dfs:
-            combined_df = pd.concat(dfs, ignore_index=True)
-        else:
-            combined_df = pd.DataFrame(columns=[
-                'tumour_id', 'segment', 'max_gap', 'gap_reason', 
-                'runtime', 'optimal_complexity', 'strict_gap_enabled'
-            ])
+    combined_df = _combine_segment_tables(
+        files,
+        ['tumour_id', 'segment', 'max_gap', 'gap_reason', 'runtime', 'optimal_complexity', 'strict_gap_enabled'],
+    )
 
     if combined_df.empty:
         message = ["All segments reached optimality; no gaps to report"]
         pd.DataFrame([message]).to_csv(outpath, index=False, header=False)
     else:
         combined_df.to_csv(outpath, index=False)
-    
-    if delete and files:
-        for fp in files:
-            try:
-                os.remove(fp)
-            except Exception as e:
-                print(f"Warning: failed to remove {fp}: {e}", file=sys.stderr)
+    if delete:
+        _remove_files(files)
 
 
 class SegmentInfeasibleError(RuntimeError):
