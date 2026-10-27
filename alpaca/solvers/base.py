@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -46,6 +46,22 @@ class SolverBackend(ABC):
     @abstractmethod
     def solve(self, allowed_complexity: int) -> SolverResult:
         """Build, solve, and return a normalized ALPACA solution."""
+
+    @abstractmethod
+    def find_alternative(
+        self,
+        allowed_complexity: int,
+        reference: Dict[Tuple[str, str], int],
+        max_ci: Optional[float],
+        max_d: Optional[float],
+    ) -> Optional[pd.DataFrame]:
+        """Look for a solution as good as a reference one but with different copy numbers.
+
+        ``reference`` maps (allele, clone) to the reference integer copy number; at
+        least one of these must differ. The CI and D objectives are capped at
+        ``max_ci`` / ``max_d`` (None leaves an objective uncapped). Returns the
+        alternative solution, or None if none exists.
+        """
 
     def supports_feature(self, feature_name: str) -> bool:
         """Override to expose optional features (e.g., IIS reports)."""

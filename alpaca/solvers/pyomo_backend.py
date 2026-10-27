@@ -13,6 +13,7 @@ from alpaca.utils import (
     flat_list,
     get_length_from_name,
     get_tree_edges,
+    homogeneous_copy_number,
     SegmentInfeasibleError,
 )
 
@@ -87,6 +88,7 @@ class PyomoBackend(SolverBackend):
         self.solver_log_path = config.get("solver_logs", "")
         self.output_directory = str(config.get("output_directory", ""))
         self.simulate_infeasibility = str(config.get("simulate_infeasibility", ""))
+        self.report_infeasibility = bool(config.get("report_infeasibility", True))
         self.big_m = 1000
         self.model: pyo.ConcreteModel | None = None
         self.allowed_tree_complexity = self.allowed_tree_complexity_default
@@ -182,6 +184,40 @@ class PyomoBackend(SolverBackend):
             solver_specific={"pyomo_results": results},
         )
 
+    def find_alternative(self, allowed_complexity, reference, max_ci, max_d):
+        self.allowed_tree_complexity = allowed_complexity
+        self._build_model()
+        m = self.model
+        # no-good cut on integers: X - ref = up - down with up, down not both positive,
+        # and at least one unit of difference over all referenced copy numbers
+        m.alt_keys = pyo.Set(initialize=list(reference), dimen=2)
+        m.alt_up = pyo.Var(m.alt_keys, domain=pyo.NonNegativeIntegers)
+        m.alt_down = pyo.Var(m.alt_keys, domain=pyo.NonNegativeIntegers)
+        m.alt_is_up = pyo.Var(m.alt_keys, domain=pyo.Binary)
+        m.alt_constraints = pyo.ConstraintList()
+        for allele, clone in reference:
+            key = (allele, clone)
+            m.alt_constraints.add(
+                m.X[allele, clone] - reference[key] == m.alt_up[key] - m.alt_down[key]
+            )
+            m.alt_constraints.add(m.alt_up[key] <= self.big_m * m.alt_is_up[key])
+            m.alt_constraints.add(m.alt_down[key] <= self.big_m * (1 - m.alt_is_up[key]))
+        m.alt_constraints.add(
+            sum(m.alt_up[k] + m.alt_down[k] for k in m.alt_keys) >= 1
+        )
+        if self.add_CI_objective and max_ci is not None:
+            m.alt_constraints.add(m.Z_expr <= max_ci)
+        if self.add_D_objective and max_d is not None:
+            m.alt_constraints.add(m.D_expr <= max_d)
+        self._activate_objective("D" if self.add_D_objective else "CI")
+        results = self._run_solver(stage="alternative")
+        termination = str(getattr(results.solver, "termination_condition", "")).lower()
+        if "infeasible" in termination:
+            return None
+        if termination != "optimal":
+            raise RuntimeError(f"alternative search ended with termination '{termination}'")
+        return self._build_solution_frame()
+
     # ------------------------------------------------------------------
     # Model construction helpers
     # ------------------------------------------------------------------
@@ -225,6 +261,10 @@ class PyomoBackend(SolverBackend):
         assert self.model is not None
         m = self.model
         m.X = pyo.Var(m.alleles, m.clones, domain=pyo.NonNegativeIntegers)
+        if "diploid" in self.clone_names:
+            # the diploid pseudo-clone is the root's parent: copy number 1 on each allele
+            for allele in self.alleles:
+                m.X[allele, "diploid"].fix(1)
         m.Yhat = pyo.Var(m.alleles, m.samples, domain=pyo.NonNegativeReals)
         m.d = pyo.Var(m.alleles, m.samples, domain=pyo.NonNegativeReals)
         m.yhat_above_upper = pyo.Var(m.alleles, m.samples, domain=pyo.Binary)
@@ -567,11 +607,16 @@ class PyomoBackend(SolverBackend):
             m.ci_constraints.add(m.X["A", clone] + m.X["B", clone] >= 1)
 
     def _restrict_heterogeneity(self) -> None:
+        """Fix a clone's allele to an integer unless a sample containing it rules that out.
+
+        Lenient criterion (as in the Gurobi model): if the CI of at least one sample
+        containing the clone holds no integer, the clone may be heterogeneous;
+        otherwise, if some sample's CI holds exactly one integer, the clone is fixed
+        to (the median of) those integers.
+        """
         assert self.model is not None
         m = self.model
-        ci_table = self.inputs.ci_table[
-            self.inputs.ci_table.segment == self.segment
-        ].copy()
+        ci_table = self.inputs.ci_table[self.inputs.ci_table.segment == self.segment]
         for clone in self.clone_names:
             if clone == "diploid":
                 continue
@@ -580,18 +625,12 @@ class PyomoBackend(SolverBackend):
             samples_present = (self.clone_proportions.loc[clone] > 0).astype(bool)
             sample_names = samples_present[samples_present].index.tolist()
             clone_ci = ci_table[ci_table["sample"].isin(sample_names)]
-            clone_ci["span_A"] = clone_ci[f"upper_CI_A"].astype(int) - clone_ci[
-                f"lower_CI_A"
-            ].astype(int)
-            clone_ci["span_B"] = clone_ci[f"upper_CI_B"].astype(int) - clone_ci[
-                f"lower_CI_B"
-            ].astype(int)
-            if (clone_ci["span_A"] == 1).any():
-                cn_val = int(clone_ci[f"upper_CI_A"][clone_ci["span_A"] == 1].median())
-                m.ci_constraints.add(m.X["A", clone] == cn_val)
-            if (clone_ci["span_B"] == 1).any():
-                cn_val = int(clone_ci[f"upper_CI_B"][clone_ci["span_B"] == 1].median())
-                m.ci_constraints.add(m.X["B", clone] == cn_val)
+            for allele in self.alleles:
+                cn_val = homogeneous_copy_number(
+                    clone_ci[f"lower_CI_{allele}"], clone_ci[f"upper_CI_{allele}"]
+                )
+                if cn_val is not None:
+                    m.ci_constraints.add(m.X[allele, clone] == cn_val)
 
     def _restrict_to_clonal_only(self) -> None:
         assert self.model is not None
@@ -717,6 +756,8 @@ class PyomoBackend(SolverBackend):
         """Raise SegmentInfeasibleError if the solver returned an infeasible status."""
         termination = str(getattr(results.solver, "termination_condition", "")).lower()
         solver_status = str(getattr(results.solver, "status", "unknown"))
+        if "infeasible" in termination and not self.report_infeasibility:
+            raise SegmentInfeasibleError(self.tumour_id, self.segment, solver_status)
         if "infeasible" in termination:
             # Write a JSON summary report so it can be combined with other segments later.
             import json as _json
