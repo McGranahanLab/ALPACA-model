@@ -223,3 +223,35 @@ def test_find_alternative(name, config):
     inputs = _single_sample_inputs(1.0, 1.0)
     reference = {(a, c): 1 for c in ("clone1", "clone2", "clone3", "clone4") for a in ("A", "B")}
     assert _backend(name, config, inputs).find_alternative(0, reference, 0, 1e-3) is None
+
+
+def _elbow_segment(category):
+    from alpaca.ALPACA_segment_solution_class import SegmentSolution
+
+    seg = SegmentSolution.__new__(SegmentSolution)
+    seg.tumour_category = category
+    seg.tumour_id, seg.segment = "T1", SMALL_SEG
+    seg.maximum_complexity = 20
+    seg.s_type = "s_strictly_decreasing"
+    seg.config = {"model_config": {"d_zero": False}}
+    seg.metrics = {
+        "solutions": [
+            pd.DataFrame({"complexity": [c], "D_score": [5.0 - c], "CI_score": [0.0], "allowed_complexity": [c]})
+            for c in range(5)
+        ]
+    }
+    return seg
+
+
+def test_single_sample_elbow_failure_selects_most_complex(monkeypatch):
+    import alpaca.ALPACA_segment_solution_class as module
+
+    monkeypatch.setattr(module, "find_s_values", lambda *args, **kwargs: (None, "default"))
+    seg = _elbow_segment(SINGLE_SAMPLE)
+    seg.find_elbow()
+    assert seg.optimal_solution_index == 4
+    assert seg.elbow["raw_code"] == "elbow_failure"
+    assert seg.elbow["dec_code"] == "elbow_failure"
+
+    with pytest.raises(AssertionError, match="S_raw not found"):
+        _elbow_segment(STANDARD).find_elbow()

@@ -745,7 +745,10 @@ class SegmentSolution:
                     if stop_conditions:
                         # check if elbow can be found
                         self.find_elbow()
-                        elbow_findable = self.elbow["s_min"] < 1000
+                        elbow_findable = (
+                            self.elbow["s_min"] < 1000
+                            and self.elbow["raw_code"] != "elbow_failure"
+                        )
                         if elbow_findable:
                             print(
                                 f"** Stopping iterations at complexity {c} due to lack of improvement in D score"
@@ -791,6 +794,14 @@ class SegmentSolution:
             "allowed_complexity",
             "D_score",
         )
+        # in single sample tumours the elbow curve can be a straight line with no knee;
+        # fall back to the most complex solution instead of failing:
+        elbow_failure = (s_raw is None or s_strictly_decreasing is None) and self.tumour_category == SINGLE_SAMPLE
+        if elbow_failure:
+            most_complex = int(self.elbow_search_df["allowed_complexity"].max())
+            print(f"Elbow not found for {self.segment}: selecting the most complex solution ({most_complex})")
+            s_raw = s_strictly_decreasing = most_complex
+            raw_code = dec_code = "elbow_failure"
         assert s_raw is not None, "S_raw not found"
         assert s_strictly_decreasing is not None, "S_strictly_decreasing not found"
         s_min = min(s_raw, s_strictly_decreasing)

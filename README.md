@@ -701,6 +701,8 @@ ALPACA classifies each tumour from `cp_table.csv` (rows are the tree's clones, c
 | several clones, one sample | ILP with heterogeneity restricted (`--single_sample_restrict_heterogeneity`). After the elbow search, the ILP is solved once more at the selected complexity, with the CI and D scores capped at the selected solution's values and the copy numbers of the clones present in the sample required to differ. | `ambiguous`: an equally good alternative exists (listed in `details`). |
 | one clone, one sample | As for one clone. | `ci_contains_no_integer_<A\|B>`, `rounding_tie_<A\|B>`. |
 
+With a single sample, the elbow curve (D score against complexity) can be a straight line with no knee. In that case ALPACA does not stop with an `S_raw not found` / `S_strictly_decreasing not found` error: iterations continue up to the maximum complexity, the most complex solution is selected, and `raw_code` and `dec_code` in the elbow table (`knee_raw_code`, `knee_dec_code`) are set to `elbow_failure`. In tumours with several samples a missing elbow is still an error.
+
 In tumour mode, ALPACA writes `warning_single_clone.txt`, `warning_single_sample.txt` or `warning_single_clone_and_single_sample.txt` to the output directory, with the flagged segments, and `logs_and_reports/edge_case_report.csv` with one row per segment. In segment mode, each segment writes `<tumour_id>_<segment>_edge_case_report.<csv|parquet>`; the [Nextflow wrapper](#nextflow-wrapper) combines them and writes the warning files per tumour.
 
 #### Known issues:
