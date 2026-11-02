@@ -100,7 +100,9 @@ def run_get_cn_change_to_ancestor():
     if not os.path.isfile(args.tree_path):
         logger.error(f"Tree file not found: {args.tree_path}")
         exit(1)
-
+    fmt = "parquet" if (os.path.isfile(args.tumour_df_path.replace(".csv", ".parquet"))) else "csv"
+    if fmt == "parquet":
+        args.tumour_df_path = args.tumour_df_path.replace(".csv", ".parquet")
     if not os.path.isfile(args.tumour_df_path):
         logger.error(f"Tumour dataframe file not found: {args.tumour_df_path}")
         exit(1)
@@ -110,7 +112,7 @@ def run_get_cn_change_to_ancestor():
         cn_change_to_ancestor_df = get_cn_change_to_ancestor(
             args.tree_path, args.tumour_df_path
         )
-        fmt = "parquet" if args.tumour_df_path.endswith(".parquet") else "csv"
+        
         save_dataframe(
             df=cn_change_to_ancestor_df,
             output_dir=args.output_directory,
@@ -146,6 +148,9 @@ def run_calculate_ccd():
 
     args = parser.parse_args()
     # Validate input files exist
+    fmt = "parquet" if (os.path.isfile(args.alpaca_output_path.replace(".csv", ".parquet"))) else "csv"
+    if fmt == "parquet":
+        args.alpaca_output_path = args.alpaca_output_path.replace(".csv", ".parquet")
     if not os.path.isfile(args.alpaca_output_path):
         logger.error(f"Tumour dataframe file not found: {args.alpaca_output_path}")
         exit(1)
