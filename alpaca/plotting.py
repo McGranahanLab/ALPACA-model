@@ -1161,8 +1161,13 @@ def plot_cpn_per_clone(
             below_MRCA = False
         if below_MRCA:
             if len(ss) == 1:
-                joined = ss + sorted_sections_raw[sorted_sections_raw.index(ss) + 1]
-                sorted_sections.append(joined)
+                if sorted_sections_raw.index(ss) < len(sorted_sections_raw) - 1:
+                    joined = ss + sorted_sections_raw[sorted_sections_raw.index(ss) + 1]
+                    sorted_sections.append(joined)
+                elif sorted_sections:
+                    sorted_sections[-1] = sorted_sections[-1] + ss
+                else:
+                    sorted_sections.append(ss)
                 skip_element = True
             else:
                 sorted_sections.append(ss)
