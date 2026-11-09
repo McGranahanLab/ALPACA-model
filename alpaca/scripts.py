@@ -204,7 +204,9 @@ def run_calculate_wgd():
     )
 
     args = parser.parse_args()
-    if not os.path.isfile(args.alpaca_output_path):
+    csv_dataframe = args.alpaca_output_path if args.alpaca_output_path.endswith(".csv") else args.alpaca_output_path.replace(".parquet", ".csv")
+    parquet_dataframe = args.alpaca_output_path if args.alpaca_output_path.endswith(".parquet") else args.alpaca_output_path.replace(".csv", ".parquet")
+    if not os.path.isfile(csv_dataframe) and not os.path.isfile(parquet_dataframe):
         logger.error(f"Tumour dataframe file not found: {args.alpaca_output_path}")
         exit(1)
     if not os.path.isfile(args.tree_path):
